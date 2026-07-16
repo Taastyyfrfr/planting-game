@@ -1,5 +1,5 @@
 /* ==========================================================================
-   NanoGarden - Core Game System (Vertical Gardening & Diagnostics Expansion)
+   NanoGarden - Core Game System (Graphics Overhaul & Dynamic Lighting)
    ========================================================================== */
 
 // --- 1. GAME DATA & CONFIGURATION ---
@@ -372,8 +372,8 @@ const PUMPKIN_MATURE = [
     "...............dggd.............",
     ".............g.d.d.g............",
     "............gg.....gg...........",
-    "..........ppppppkkpppppp........",
-    "........ppppppkkkkkkpppppp......",
+    "          ppppppkkpppppp        ",
+    "        ppppppkkkkkkpppppp      ",
     "      pppppppkkkkkkkkppppppp    ",
     "     ppppppppkkkkkkkkpppppppp   ",
     "    pppppppppkkkkkkkkppppppppp  ",
@@ -640,6 +640,13 @@ let xp = 0;
 let level = 1;
 let harvestCount = 0;
 
+// Dynamic lighting day/night loop variables
+let dayNightTime = 15; // starts at early day (0 to 60)
+let theta = 0; // sun angle
+let sunX = 320;
+let sunY = 100;
+let ambientColor = 'rgb(220, 220, 220)';
+
 // Z-Axis Multi-Tier state
 let activeFloor = 0; // 0 = Ground Bed, 1 = Hydroponics, 2 = Canopy
 let currentScrollY = 0; // for animating elevator transitions
@@ -719,6 +726,13 @@ const upgrades = {
 let grassPatternCanvas = null;
 let hydroBackgroundCanvas = null;
 let canopyBackgroundCanvas = null;
+
+// Lightmap Caching Canvas
+let lightmapCanvas = null;
+let lightmapCtx = null;
+
+// Silhouette temporary canvas for Dynamic Skew Shadow outlines
+let shadowSilhouetteCanvas = null;
 
 // --- 5. PROCEDURAL TEXTURE GENERATION ---
 
@@ -950,7 +964,7 @@ function harvestCropAt(floor, row, col) {
     
     const crop = cell.cropInstance;
     
-    // Hydraulic Ascent Pipe (and future structures) removal refund
+    // Hydraulic Ascent Pipe removal refund
     if (crop.cropType.isStructure) {
         coins += Math.round(crop.cropType.cost / 2);
         SoundFX.playHarvest();
@@ -1048,7 +1062,6 @@ function spawnWaterParticles(x, y, count = 8) {
                 this.y += this.vy * dt;
                 this.life -= dt;
                 
-                // Out-of-bounds entity recycle check
                 if (this.x < -100 || this.x > 740 || this.y < -1500 || this.y > 1000) {
                     this.life = 0;
                 }
@@ -1081,7 +1094,7 @@ function spawnHarvestParticles(x, y, count = 15) {
                 this.x += this.vx * dt;
                 this.vy += this.gravity * dt;
                 this.y += this.vy * dt;
-                this.vx *= 0.95; // drag
+                this.vx *= 0.95;
                 this.life -= dt;
                 
                 if (this.x < -100 || this.x > 740 || this.y < -1500 || this.y > 1000) {
@@ -1209,7 +1222,7 @@ class Drone {
         this.id = id;
         this.type = type; // 'harvester', 'planter', 'waterer'
         this.x = x;
-        this.y = y; // Drone Y coordinates are tracked in global vertical space
+        this.y = y; // global Y coordinates
         this.tx = x;
         this.ty = y;
         this.state = 'idle';
@@ -1229,7 +1242,6 @@ class Drone {
         if (this.state === 'idle') {
             this.findJob();
             
-            // Hover home orbiting centers slide up or down dynamically depending on active floor
             const cx = gridOffsetX + (gridSize * cellSize) / 2;
             const cy = gridOffsetY - 40 - activeFloor * 640;
             const offsetDist = gridSize * cellSize * 0.4;
@@ -1246,7 +1258,6 @@ class Drone {
                 this.x = this.tx;
                 this.y = this.ty;
                 
-                // Arrived
                 if (this.type === 'harvester') {
                     if (this.targetCrop) {
                         harvestCropAt(this.targetCrop.floor, this.targetCrop.row, this.targetCrop.col);
@@ -1275,7 +1286,6 @@ class Drone {
                 this.x += Math.cos(angle) * Math.min(step, dist);
                 this.y += Math.sin(angle) * Math.min(step, dist);
                 
-                // Thrust sparks trailing behind
                 if (Math.random() < 0.22) {
                     particles.push({
                         x: this.x,
@@ -1330,14 +1340,12 @@ class Drone {
             }
         }
         
-        // Robust Bounds Clamping snap back
         this.x = Math.max(-100, Math.min(canvas.width + 100, this.x));
         this.y = Math.max(-1480, Math.min(800, this.y));
     }
     
     findJob() {
         if (this.type === 'harvester') {
-            // Scan Z-axis floors starting from top to bottom
             for (let f = 2; f >= 0; f--) {
                 for (let r = 0; r < gridSize; r++) {
                     for (let c = 0; c < gridSize; c++) {
@@ -1356,7 +1364,7 @@ class Drone {
                 }
             }
         } else if (this.type === 'planter') {
-            if (!selectedSeed || selectedSeed.isStructure) return; // Prevent bots from auto-plumbing hydraulic lines
+            if (!selectedSeed || selectedSeed.isStructure) return;
             const cropType = selectedSeed;
             if (coins < cropType.cost) return;
             
@@ -1390,7 +1398,6 @@ class Drone {
                 for (let r = 0; r < gridSize; r++) {
                     for (let c = 0; c < gridSize; c++) {
                         const cell = grid[f][r][c];
-                        // Ascent Pipes and standard dry soils
                         if (cell.waterLevel < 25 && !cell.waterReserved) {
                             cell.waterReserved = true;
                             this.targetCell = { floor: f, row: r, col: c };
@@ -1411,9 +1418,8 @@ class Drone {
         
         const floatOffset = Math.sin(this.idleTimer * 4.5 + this.id) * 3;
         const dx = this.x;
-        const dy = this.y + floatOffset + currentScrollY; // Map to camera scroll
+        const dy = this.y + floatOffset + currentScrollY;
         
-        // Cull drawing if fully offscreen
         if (dy < -50 || dy > canvas.height + 50) {
             ctx.restore();
             return;
@@ -1422,7 +1428,6 @@ class Drone {
         ctx.strokeStyle = '#64748b';
         ctx.lineWidth = 1.8;
         
-        // Rotors
         ctx.beginPath();
         const rx1 = dx - 11;
         const ry1 = dy - 2;
@@ -1437,7 +1442,6 @@ class Drone {
         ctx.lineTo(rx2 + Math.cos(this.rotorsAngle + Math.PI / 2) * 7, ry2 + Math.sin(this.rotorsAngle + Math.PI / 2) * 2);
         ctx.stroke();
         
-        // Drone core shell
         ctx.fillStyle = '#334155';
         ctx.strokeStyle = '#1e293b';
         ctx.lineWidth = 2;
@@ -1477,12 +1481,46 @@ function drawBackground() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
+// Dynamic Silhouette Shadow drawing function
+function drawCropShadow(ctx, sprite, px, py, pw, ph) {
+    if (!shadowSilhouetteCanvas) return;
+    
+    // Set silhouette canvas dimensions
+    shadowSilhouetteCanvas.width = pw;
+    shadowSilhouetteCanvas.height = ph;
+    
+    const sCtx = shadowSilhouetteCanvas.getContext('2d');
+    sCtx.clearRect(0, 0, pw, ph);
+    sCtx.drawImage(sprite, 0, 0, pw, ph);
+    
+    // Overwrite pixels with dark semi-transparent shadow outline
+    sCtx.globalCompositeOperation = 'source-in';
+    sCtx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+    sCtx.fillRect(0, 0, pw, ph);
+    
+    ctx.save();
+    // Translate origin to the base center of the crop
+    ctx.translate(px + pw / 2, py + ph);
+    
+    // Apply dynamic skew vector and squash mapping based on day-night sun vector
+    const skewX = -Math.cos(theta) * 0.85;
+    const scaleY = Math.abs(Math.sin(theta)) * 0.22 + 0.08;
+    ctx.transform(1, 0, skewX, scaleY, 0, 0);
+    
+    // Translate origin back and draw shadow silhouette
+    ctx.translate(-pw / 2, -ph);
+    ctx.drawImage(shadowSilhouetteCanvas, 0, 0, pw, ph);
+    ctx.restore();
+}
+
 function updateSoilAndCrops(dt) {
     const growthUpgradeMultiplier = upgrades.growthSpeed.multiplier;
     const waterEvaporationMultiplier = upgrades.waterDuration.value;
     const evaporationRate = 4 / waterEvaporationMultiplier;
     
-    // 1. Water pumping logic for Hydraulic Ascent Pipes (Floor N -> Floor N+1)
+    const isNight = Math.sin(theta) <= 0;
+    
+    // 1. Water pumping logic for Hydraulic Ascent Pipes
     for (let f = 0; f < 2; f++) {
         for (let r = 0; r < gridSize; r++) {
             for (let c = 0; c < gridSize; c++) {
@@ -1493,7 +1531,7 @@ function updateSoilAndCrops(dt) {
                         cell.waterLevel -= flow;
                         grid[f + 1][r][c].waterLevel = Math.min(100, grid[f + 1][r][c].waterLevel + flow);
                         
-                        // Spawn upward bubble flow particles
+                        // Spawn upward bubble particles
                         if (Math.random() < 0.22) {
                             const px = gridOffsetX + c * cellSize + cellSize / 2;
                             const pyStart = gridOffsetY + r * cellSize + cellSize / 2 - f * 640;
@@ -1502,7 +1540,7 @@ function updateSoilAndCrops(dt) {
                                 y: pyStart,
                                 targetY: pyStart - 640,
                                 vx: (Math.random() - 0.5) * 6,
-                                vy: -380, // upward velocity
+                                vy: -380,
                                 size: 1.5 + Math.random() * 2,
                                 color: 'rgba(56, 189, 248, 0.9)',
                                 life: 1.8,
@@ -1526,12 +1564,12 @@ function updateSoilAndCrops(dt) {
         }
     }
     
-    // 2. Loop over Z-axis floors for updates & rendering
+    // 2. Loop over Z-axis floors
     for (let f = 0; f < 3; f++) {
         const floorYOffset = currentScrollY - f * 640;
         const isFloorVisible = (floorYOffset > -640 && floorYOffset < 640);
         
-        // Preemptive rendering / offset based on scroll velocity (Frustum Culling)
+        // Frustum Culling checks
         if (isFloorVisible) {
             let bgCanvas = grassPatternCanvas;
             if (f === 1) bgCanvas = hydroBackgroundCanvas;
@@ -1539,6 +1577,31 @@ function updateSoilAndCrops(dt) {
             
             if (bgCanvas) {
                 ctx.drawImage(bgCanvas, 0, floorYOffset);
+            }
+            
+            // PBR-like Material Effects
+            // Floor 1 (Hydroponics): metallic reflective sheen lines moving with light angle
+            if (f === 1) {
+                const sheenOffset = ((sunX / 2) + 320) % 640;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
+                ctx.lineWidth = 20;
+                ctx.beginPath();
+                ctx.moveTo(sheenOffset - 120, floorYOffset);
+                ctx.lineTo(sheenOffset + 120, floorYOffset + 640);
+                ctx.stroke();
+                ctx.restore();
+            }
+            
+            // Floor 2 (Canopy): glass specular dome stroke outline
+            if (f === 2) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(gridOffsetX + 120, gridOffsetY + 120 + floorYOffset, 90, Math.PI, Math.PI * 1.5);
+                ctx.stroke();
+                ctx.restore();
             }
             
             // Raised wooden garden bed border frame
@@ -1568,7 +1631,6 @@ function updateSoilAndCrops(dt) {
                     cell.waterLevel = Math.max(0, cell.waterLevel - evaporationRate * dt);
                 }
                 
-                // Draw soil tiles only if visible
                 if (isFloorVisible) {
                     const px = gridOffsetX + c * cellSize;
                     const py = gridOffsetY + r * cellSize + floorYOffset;
@@ -1592,7 +1654,6 @@ function updateSoilAndCrops(dt) {
                     const crop = cell.cropInstance;
                     drawnCrops.add(crop.id);
                     
-                    // Bounding average soil water moisture
                     let totalWater = 0;
                     let cellCount = 0;
                     for (let tr = crop.row; tr < crop.row + crop.cropType.height; tr++) {
@@ -1603,14 +1664,13 @@ function updateSoilAndCrops(dt) {
                     }
                     const avgWater = totalWater / cellCount;
                     
-                    // Simulate growth cycle if not static structure
                     if (!crop.cropType.isStructure && crop.growth < 100) {
                         const waterBonus = 1 + (avgWater / 100) * 1.5;
                         const baseGrowthRate = 100 / crop.cropType.growthTime;
                         crop.growth = Math.min(100, crop.growth + baseGrowthRate * growthUpgradeMultiplier * waterBonus * dt);
                     }
                     
-                    // Draw crop shapes only if floor is visible
+                    // Render if visible
                     if (isFloorVisible) {
                         const px = gridOffsetX + crop.col * cellSize;
                         const py = gridOffsetY + crop.row * cellSize + floorYOffset;
@@ -1623,20 +1683,108 @@ function updateSoilAndCrops(dt) {
                         else if (crop.growth >= 18) stage = 1;
                         else stage = 0;
                         
+                        // Level of Detail (LOD) crop sprite selections
                         let sprite = null;
-                        if (stage === 0) sprite = sprites.seed;
-                        else if (stage === 1) sprite = sprites.sprout;
-                        else {
-                            const nameLower = crop.cropType.name.toLowerCase();
-                            sprite = sprites[nameLower] ? sprites[nameLower][stage] : null;
+                        if (f === activeFloor) {
+                            // LOD 0 (Detailed): Full sprite resolution
+                            if (stage === 0) sprite = sprites.seed;
+                            else if (stage === 1) sprite = sprites.sprout;
+                            else {
+                                const nameLower = crop.cropType.name.toLowerCase();
+                                sprite = sprites[nameLower] ? sprites[nameLower][stage] : null;
+                            }
+                        } else {
+                            // LOD 1 (Simplified): Draw lower resolution sprout/growing sprite
+                            if (crop.growth < 55) {
+                                sprite = sprites.sprout;
+                            } else {
+                                const nameLower = crop.cropType.name.toLowerCase();
+                                sprite = sprites[nameLower] ? sprites[nameLower][2] : sprites.sprout;
+                            }
                         }
                         
+                        // Draw Dynamic Drop Shadow Outline before the crop itself
                         if (sprite) {
+                            drawCropShadow(ctx, sprite, px, py, pw, ph);
                             ctx.drawImage(sprite, px, py, pw, ph);
                         }
                         
-                        if (!crop.cropType.isStructure && crop.growth < 100) {
+                        // Draw growth bars (only on active floor, LOD 0)
+                        if (f === activeFloor && !crop.cropType.isStructure && crop.growth < 100) {
                             drawGrowthBar(px, py, pw, ph, crop.growth);
+                        }
+                        
+                        // PBR-like Emissive glowing maps at night for mature crops
+                        if (isNight && crop.growth >= 100) {
+                            const nameLower = crop.cropType.name.toLowerCase();
+                            ctx.save();
+                            
+                            if (nameLower === 'strawberry') {
+                                // Glowing yellow seeds
+                                ctx.fillStyle = '#fde047';
+                                ctx.shadowColor = '#fde047';
+                                ctx.shadowBlur = 4;
+                                ctx.fillRect(px + pw / 3, py + ph / 2, 1.5, 1.5);
+                                ctx.fillRect(px + 2 * pw / 3, py + ph / 3, 1.5, 1.5);
+                                ctx.fillRect(px + pw / 2, py + 2 * ph / 3, 1.5, 1.5);
+                            } else if (nameLower === 'watermelon') {
+                                // Glowing neon stripes
+                                ctx.strokeStyle = '#4ade80';
+                                ctx.shadowColor = '#4ade80';
+                                ctx.shadowBlur = 4;
+                                ctx.lineWidth = 1.8;
+                                ctx.beginPath();
+                                ctx.moveTo(px + pw / 4, py + ph / 3);
+                                ctx.lineTo(px + pw / 4, py + 2 * ph / 3);
+                                ctx.moveTo(px + pw / 2, py + ph / 4);
+                                ctx.lineTo(px + pw / 2, py + 3 * ph / 4);
+                                ctx.moveTo(px + 3 * pw / 4, py + ph / 3);
+                                ctx.lineTo(px + 3 * pw / 4, py + 2 * ph / 3);
+                                ctx.stroke();
+                            } else if (nameLower === 'sunflower') {
+                                // Glowing gold halo around flower head
+                                ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
+                                ctx.shadowColor = '#f59e0b';
+                                ctx.shadowBlur = 8;
+                                ctx.lineWidth = 1.5;
+                                ctx.beginPath();
+                                ctx.arc(px + pw / 2, py + ph / 4, pw / 3.2, 0, Math.PI * 2);
+                                ctx.stroke();
+                            } else if (nameLower === 'pumpkin') {
+                                // Glowing Jack-o'-lantern carved face
+                                ctx.fillStyle = '#f97316';
+                                ctx.shadowColor = '#ea580c';
+                                ctx.shadowBlur = 10;
+                                
+                                // Triangle eye left
+                                ctx.beginPath();
+                                ctx.moveTo(px + pw / 3 - 1, py + ph / 2.8);
+                                ctx.lineTo(px + pw / 3 - 5, py + ph / 2.8 + 6);
+                                ctx.lineTo(px + pw / 3 + 3, py + ph / 2.8 + 6);
+                                ctx.closePath();
+                                ctx.fill();
+                                
+                                // Triangle eye right
+                                ctx.beginPath();
+                                ctx.moveTo(px + 2 * pw / 3 - 1, py + ph / 2.8);
+                                ctx.lineTo(px + 2 * pw / 3 - 5, py + ph / 2.8 + 6);
+                                ctx.lineTo(px + 2 * pw / 3 + 3, py + ph / 2.8 + 6);
+                                ctx.closePath();
+                                ctx.fill();
+                                
+                                // Carved mouth
+                                ctx.beginPath();
+                                ctx.moveTo(px + pw / 3.8, py + ph / 2 + 3);
+                                ctx.lineTo(px + pw / 3, py + ph / 2 + 7);
+                                ctx.lineTo(px + pw / 2, py + ph / 2 + 3);
+                                ctx.lineTo(px + 2 * pw / 3, py + ph / 2 + 7);
+                                ctx.lineTo(px + 3 * pw / 4.2, py + ph / 2 + 3);
+                                ctx.lineTo(px + pw / 2, py + ph / 2 + 11);
+                                ctx.closePath();
+                                ctx.fill();
+                            }
+                            
+                            ctx.restore();
                         }
                     }
                 }
@@ -1645,223 +1793,76 @@ function updateSoilAndCrops(dt) {
     }
 }
 
-function drawGrowthBar(x, y, w, h, growth) {
-    const barW = w - 16;
-    const barH = 5;
-    const barX = x + 8;
-    const barY = y + h - 8;
+// Lightmap Caching Builder
+function drawLightmap() {
+    if (!lightmapCtx) return;
+    const lCtx = lightmapCtx;
     
-    ctx.save();
-    ctx.fillStyle = 'var(--bg-dark)';
-    ctx.fillRect(barX, barY, barW, barH);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(barX, barY, barW, barH);
+    // 1. Clear with ambient daylight / moonlight color
+    lCtx.fillStyle = ambientColor;
+    lCtx.fillRect(0, 0, 160, 160);
     
-    ctx.fillStyle = 'var(--primary)';
-    ctx.fillRect(barX + 0.5, barY + 0.5, (barW - 1) * (growth / 100), barH - 1);
-    ctx.restore();
-}
-
-function drawHoverPreview() {
-    const hoverCell = getCellFromCoords(mouseX, mouseY);
-    if (!hoverCell) return;
+    // 2. Set screen blend mode to accumulate light sources
+    lCtx.globalCompositeOperation = 'screen';
     
-    const r = hoverCell.row;
-    const c = hoverCell.col;
+    // 3. Directional sun/moon glow
+    const lSunX = (sunX / 640) * 160;
+    const lSunY = (sunY / 640) * 160;
+    const isNight = Math.sin(theta) <= 0;
     
-    const floorYOffset = currentScrollY - activeFloor * 640;
-    
-    if (selectedSeed) {
-        const cropType = selectedSeed;
-        
-        let fits = true;
-        if (r + cropType.height > gridSize || c + cropType.width > gridSize) {
-            fits = false;
-        } else {
-            for (let tr = r; tr < r + cropType.height; tr++) {
-                for (let tc = c; tc < c + cropType.width; tc++) {
-                    if (grid[activeFloor][tr][tc].cropInstance || grid[activeFloor][tr][tc].reservedBy) {
-                        fits = false;
-                        break;
-                    }
-                }
-                if (!fits) break;
-            }
-        }
-        
-        const px = gridOffsetX + c * cellSize;
-        const py = gridOffsetY + r * cellSize + floorYOffset;
-        const pw = cropType.width * cellSize;
-        const ph = cropType.height * cellSize;
-        
-        ctx.save();
-        if (fits) {
-            ctx.strokeStyle = 'rgba(52, 211, 153, 0.85)';
-            ctx.fillStyle = 'rgba(52, 211, 153, 0.18)';
-            ctx.shadowColor = 'rgba(52, 211, 153, 0.45)';
-        } else {
-            ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
-            ctx.shadowColor = 'rgba(239, 68, 68, 0.45)';
-        }
-        ctx.shadowBlur = 8;
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
-        ctx.fillRect(px + 2, py + 2, pw - 4, ph - 4);
-        
-        const cropSprites = sprites[cropType.name.toLowerCase()];
-        const sprite = cropSprites ? (cropSprites[3] || cropSprites[2]) : sprites.sprout;
-        if (sprite) {
-            ctx.globalAlpha = 0.4;
-            ctx.drawImage(sprite, px, py, pw, ph);
-        }
-        ctx.restore();
+    const sunGlow = lCtx.createRadialGradient(lSunX, lSunY, 5, lSunX, lSunY, 80);
+    if (!isNight) {
+        sunGlow.addColorStop(0, 'rgba(253, 224, 71, 0.45)'); // sun yellow
+        sunGlow.addColorStop(1, 'rgba(253, 224, 71, 0)');
     } else {
-        const cellData = grid[activeFloor][r][c];
-        
-        if (selectedTool === 'water') {
-            const px = gridOffsetX + c * cellSize;
-            const py = gridOffsetY + r * cellSize + floorYOffset;
-            ctx.save();
-            ctx.strokeStyle = 'rgba(14, 165, 233, 0.8)';
-            ctx.fillStyle = 'rgba(14, 165, 233, 0.12)';
-            ctx.shadowColor = 'rgba(14, 165, 233, 0.4)';
-            ctx.shadowBlur = 8;
-            ctx.lineWidth = 2;
-            ctx.strokeRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
-            ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
-            ctx.restore();
-        } else if (selectedTool === 'harvest') {
-            if (cellData.cropInstance) {
-                const crop = cellData.cropInstance;
-                const px = gridOffsetX + crop.col * cellSize;
-                const py = gridOffsetY + crop.row * cellSize + (currentScrollY - crop.floor * 640);
-                const pw = crop.cropType.width * cellSize;
-                const ph = crop.cropType.height * cellSize;
-                
-                ctx.save();
-                if (crop.growth >= 100 || crop.cropType.isStructure) {
-                    ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
-                    ctx.fillStyle = 'rgba(245, 158, 11, 0.18)';
-                    ctx.shadowColor = 'rgba(245, 158, 11, 0.45)';
-                } else {
-                    ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
-                    ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
-                    ctx.shadowColor = 'rgba(239, 68, 68, 0.45)';
-                }
-                ctx.shadowBlur = 8;
-                ctx.lineWidth = 2.5;
-                ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
-                ctx.fillRect(px + 2, py + 2, pw - 4, ph - 4);
-                ctx.restore();
-            }
-        } else if (selectedTool === 'inspect') {
-            let px = gridOffsetX + c * cellSize;
-            let py = gridOffsetY + r * cellSize + floorYOffset;
-            let pw = cellSize;
-            let ph = cellSize;
-            
-            if (cellData.cropInstance) {
-                const crop = cellData.cropInstance;
-                px = gridOffsetX + crop.col * cellSize;
-                py = gridOffsetY + crop.row * cellSize + (currentScrollY - crop.floor * 640);
-                pw = crop.cropType.width * cellSize;
-                ph = crop.cropType.height * cellSize;
-            }
-            
-            ctx.save();
-            ctx.strokeStyle = 'rgba(248, 250, 252, 0.7)';
-            ctx.setLineDash([4, 4]);
-            ctx.lineWidth = 2;
-            ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
-            ctx.restore();
-        }
+        sunGlow.addColorStop(0, 'rgba(186, 230, 253, 0.32)'); // moon silver
+        sunGlow.addColorStop(1, 'rgba(186, 230, 253, 0)');
     }
-}
-
-function drawDiagnostics() {
-    if (!noclipEnabled) return;
+    lCtx.fillStyle = sunGlow;
+    lCtx.beginPath();
+    lCtx.arc(lSunX, lSunY, 80, 0, Math.PI * 2);
+    lCtx.fill();
     
-    ctx.save();
-    ctx.font = 'bold 9px monospace';
-    
-    // 1. Render Magenta Wireframes around all placed Crops & root intersections
-    for (let f = 0; f < 3; f++) {
-        const floorYOffset = currentScrollY - f * 640;
-        if (floorYOffset > -640 && floorYOffset < 640) {
-            const drawnCrops = new Set();
-            for (let r = 0; r < gridSize; r++) {
-                for (let c = 0; c < gridSize; c++) {
-                    const cell = grid[f][r][c];
-                    if (cell.cropInstance && !drawnCrops.has(cell.cropInstance.id)) {
-                        const crop = cell.cropInstance;
-                        drawnCrops.add(crop.id);
-                        
-                        const px = gridOffsetX + crop.col * cellSize;
-                        const py = gridOffsetY + crop.row * cellSize + floorYOffset;
-                        const pw = crop.cropType.width * cellSize;
-                        const ph = crop.cropType.height * cellSize;
-                        
-                        // Bounding collision meshes
-                        ctx.strokeStyle = '#ec4899';
-                        ctx.lineWidth = 1.5;
-                        ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
-                        
-                        // Root depth intersection wireframe
-                        const rootX = px + pw / 2;
-                        const rootYStart = py + ph - 4;
-                        const rootDepth = crop.cropType.isStructure ? 4 : (25 * (crop.growth / 100) + 4);
-                        ctx.strokeStyle = '#22c55e';
-                        ctx.beginPath();
-                        ctx.moveTo(rootX, rootYStart);
-                        ctx.lineTo(rootX, rootYStart + rootDepth);
-                        ctx.stroke();
-                        
-                        ctx.fillStyle = '#ec4899';
-                        ctx.fillText(`${crop.cropType.name.replace(' ', '')} (F${f})`, px + 4, py + 12);
-                        ctx.fillStyle = '#22c55e';
-                        ctx.fillText(`Root:${Math.round(rootDepth)}px`, px + 4, py + ph - 6);
-                    }
-                    
-                    if (cell.reservedBy) {
-                        const px = gridOffsetX + c * cellSize;
-                        const py = gridOffsetY + r * cellSize + floorYOffset;
-                        ctx.strokeStyle = '#eab308';
-                        ctx.strokeRect(px + 3, py + 3, cellSize - 6, cellSize - 6);
-                        ctx.fillStyle = '#eab308';
-                        ctx.fillText(`RSV:${cell.reservedBy}`, px + 6, py + 14);
-                    }
-                }
-            }
-        }
-    }
-    
-    // 2. Drone flight paths & action circle radii
+    // 4. Drone point lights
     drones.forEach(d => {
-        const drawY = d.y + currentScrollY;
+        const ldX = (d.x / 640) * 160;
+        const ldY = ((d.y + currentScrollY) / 640) * 160;
         
-        if (d.state === 'moving') {
-            ctx.strokeStyle = '#a855f7';
-            ctx.setLineDash([2, 4]);
-            ctx.beginPath();
-            ctx.moveTo(d.x, drawY);
-            ctx.lineTo(d.tx, d.ty + currentScrollY);
-            ctx.stroke();
-            ctx.setLineDash([]);
+        if (ldY > -20 && ldY < 180) {
+            let color = 'rgba(16, 185, 129, 0.8)';
+            if (d.type === 'harvester') color = 'rgba(6, 182, 212, 0.9)'; // Cyan
+            else if (d.type === 'planter') color = 'rgba(245, 158, 11, 0.9)'; // Gold
+            else if (d.type === 'waterer') color = 'rgba(56, 189, 248, 0.9)'; // Water blue
+            
+            const droneGlow = lCtx.createRadialGradient(ldX, ldY, 2, ldX, ldY, 22);
+            droneGlow.addColorStop(0, color);
+            droneGlow.addColorStop(0.3, color.replace('0.9', '0.4').replace('0.8', '0.4'));
+            droneGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            
+            lCtx.fillStyle = droneGlow;
+            lCtx.beginPath();
+            lCtx.arc(ldX, ldY, 22, 0, Math.PI * 2);
+            lCtx.fill();
         }
-        
-        ctx.strokeStyle = '#06b6d4';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.arc(d.x, drawY, 12, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        ctx.fillStyle = '#06b6d4';
-        ctx.fillText(`${d.type.toUpperCase()}:${d.state}`, d.x - 24, drawY - 16);
     });
     
-    ctx.restore();
+    // 5. Cursor spotlight
+    if (mouseX >= 0 && mouseX <= 640 && mouseY >= 0 && mouseY <= 640) {
+        const lmX = (mouseX / 640) * 160;
+        const lmY = (mouseY / 640) * 160;
+        
+        const mouseGlow = lCtx.createRadialGradient(lmX, lmY, 2, lmX, lmY, 28);
+        mouseGlow.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+        mouseGlow.addColorStop(0.3, 'rgba(255, 255, 255, 0.2)');
+        mouseGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        
+        lCtx.fillStyle = mouseGlow;
+        lCtx.beginPath();
+        lCtx.arc(lmX, lmY, 28, 0, Math.PI * 2);
+        lCtx.fill();
+    }
+    
+    lCtx.globalCompositeOperation = 'source-over';
 }
 
 // --- 10. MAIN SYSTEM LOOP ---
@@ -1874,13 +1875,38 @@ function gameLoop(currentTime) {
     if (dt > 0.1) dt = 0.1;
     lastTime = currentTime;
     
+    // 1. Dynamic day/night sun cycle progression (60 seconds loop)
+    dayNightTime = (dayNightTime + dt) % 60;
+    theta = (dayNightTime / 60) * Math.PI * 2;
+    
+    // Sun position calculations
+    sunX = canvas.width / 2 + Math.cos(theta) * 320;
+    sunY = canvas.height / 2 + Math.sin(theta) * 320;
+    
+    // Calculate lightmap ambient colors
+    if (Math.sin(theta) > 0) {
+        // Daytime
+        const factor = Math.sin(theta);
+        const r = Math.floor(180 + factor * 75);
+        const g = Math.floor(180 + factor * 75);
+        const b = Math.floor(190 + factor * 65);
+        ambientColor = `rgb(${r}, ${g}, ${b})`;
+    } else {
+        // Nighttime
+        const factor = Math.abs(Math.sin(theta));
+        const r = Math.floor(30 - factor * 15);
+        const g = Math.floor(30 - factor * 15);
+        const b = Math.floor(65 - factor * 25);
+        ambientColor = `rgb(${r}, ${g}, ${b})`;
+    }
+    
     // Animate elevator viewport scrolling offsets
     currentScrollY += (activeFloor * 640 - currentScrollY) * 9 * dt;
     
     // Clear canvas
     drawBackground();
     
-    // Update grid soil values & crops growth states (includes water elevator routing)
+    // Update grid soil values & crops growth states
     updateSoilAndCrops(dt);
     
     // Draw selection highlights under the pointer
@@ -1899,6 +1925,14 @@ function gameLoop(currentTime) {
         d.update(dt);
         d.draw(ctx);
     });
+    
+    // 2. Render dynamic lightmap multiply overlay
+    drawLightmap();
+    ctx.save();
+    ctx.imageSmoothingEnabled = true; // smooth light scaling blur
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.drawImage(lightmapCanvas, 0, 0, 640, 640);
+    ctx.restore();
 }
 
 // --- 11. STATS & PROGRESSION UPDATES ---
@@ -1953,6 +1987,17 @@ function updateUI() {
     document.getElementById('buy-harvester').disabled = coins < hCost;
     document.getElementById('buy-planter').disabled = coins < pCost;
     document.getElementById('buy-waterer').disabled = coins < wCost;
+    
+    // Update Day/Night indicator elements
+    const isNight = Math.sin(theta) <= 0;
+    const timeIcon = document.getElementById('time-icon');
+    const timeText = document.getElementById('time-text');
+    if (timeIcon && timeText) {
+        timeIcon.innerText = isNight ? '🌙' : '☀️';
+        timeText.innerText = isNight ? 'Night' : 'Day';
+        timeText.style.color = isNight ? '#a5b4fc' : '#fde047';
+        timeText.style.textShadow = isNight ? '0 0 8px rgba(165, 180, 252, 0.55)' : '0 0 8px rgba(253, 224, 71, 0.55)';
+    }
     
     let hasAnyCrop = false;
     for (let f = 0; f < 3; f++) {
@@ -2165,7 +2210,7 @@ function buyGridUpgrade(cost, nextSize) {
     coins -= cost;
     upgrades.gridSize.level += 1;
     gridSize = nextSize;
-    initGrid(true); // copies old crops across floors
+    initGrid(true);
     SoundFX.playUpgrade();
     showTicker(`Expanded garden plots grid to ${nextSize}x${nextSize}!`);
     updateUI();
@@ -2297,6 +2342,15 @@ function init() {
     ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     
+    // Lightmap canvas caching initialization
+    lightmapCanvas = document.createElement('canvas');
+    lightmapCanvas.width = 160;
+    lightmapCanvas.height = 160;
+    lightmapCtx = lightmapCanvas.getContext('2d');
+    
+    // Silhouette canvas caching initialization
+    shadowSilhouetteCanvas = document.createElement('canvas');
+    
     // Render procedural sprite sheets & backgrounds
     initSprites();
     
@@ -2391,7 +2445,6 @@ function init() {
                     cellData.waterLevel = Math.min(100, cellData.waterLevel + 45);
                     SoundFX.playWater();
                     
-                    // Map local canvas coordinate to global Z-axis stack
                     const yGlobal = y - activeFloor * 640;
                     spawnWaterParticles(x, yGlobal, 6);
                     showTicker(`Watered soil plot!`);
