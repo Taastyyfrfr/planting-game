@@ -1,0 +1,9 @@
+# Python build and packaging artifacts
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Specs
+*.spec

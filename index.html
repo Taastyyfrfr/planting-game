@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NanoGarden - Pixel Gardening & Automation Game</title>
+    <!-- Modern Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header / Stats Bar -->
+        <header class="glass-card header-bar">
+            <div class="logo">
+                <span class="pixel-logo">NanoGarden</span>
+                <span class="subtitle">Nature Tech Corp.</span>
+            </div>
+            
+            <div class="stats-container">
+                <div class="stat-item" id="stat-coins">
+                    <span class="icon">🪙</span>
+                    <div class="stat-value-container">
+                        <span class="label">Balance</span>
+                        <span class="value" id="coin-balance">$20</span>
+                    </div>
+                </div>
+                <div class="stat-item" id="stat-xp">
+                    <span class="icon">✨</span>
+                    <div class="stat-value-container">
+                        <span class="label">XP Level <span id="level-num">1</span></span>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="xp-progress" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-item" id="stat-harvests">
+                    <span class="icon">🌾</span>
+                    <div class="stat-value-container">
+                        <span class="label">Harvests</span>
+                        <span class="value" id="harvest-count">0</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Game Area -->
+        <main class="game-layout">
+            <!-- Left Sidebar: Store & Crop Selection -->
+            <section class="glass-card panel-left">
+                <h2>🌱 Crop Store</h2>
+                <div class="scroll-container">
+                    <div class="shop-list" id="crop-shop">
+                        <!-- Crops will be injected here by JS -->
+                    </div>
+                </div>
+
+                <h2 style="margin-top: 20px;">🛠️ Tools</h2>
+                <div class="tools-grid">
+                    <button class="tool-btn active" id="tool-inspect" data-tool="inspect">
+                        <span class="tool-icon">🔍</span>
+                        <span class="tool-name">Inspect</span>
+                    </button>
+                    <button class="tool-btn" id="tool-water" data-tool="water">
+                        <span class="tool-icon">💧</span>
+                        <span class="tool-name">Water Can</span>
+                    </button>
+                    <button class="tool-btn" id="tool-harvest" data-tool="harvest">
+                        <span class="tool-icon">🪓</span>
+                        <span class="tool-name">Harvest</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Center: The Canvas Sandbox -->
+            <section class="canvas-panel">
+                <div class="canvas-wrapper glass-card">
+                    <canvas id="gameCanvas"></canvas>
+                    <div id="canvas-overlay-text" class="hidden">Click on the grid to plant/interact!</div>
+                </div>
+                
+                <div class="glass-card helper-bar">
+                    <div class="instruction-ticker" id="ticker-text">
+                        Welcome to your NanoGarden! Select Carrot seeds to start planting. Water the crops to speed up their growth!
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Sidebar: Automation & Upgrades -->
+            <section class="glass-card panel-right">
+                <!-- Automation Panel -->
+                <h2>🤖 Automation Drones</h2>
+                <div class="automation-list">
+                    <!-- Harvester Drone -->
+                    <div class="automation-card" id="auto-harvester-card">
+                        <div class="card-header">
+                            <div>
+                                <span class="drone-title">Harvester Drone</span>
+                                <span class="drone-count">Active: <span id="harvester-count">0</span></span>
+                            </div>
+                            <span class="drone-emoji">🛸</span>
+                        </div>
+                        <p class="description">Automatically harvests mature crops & collects earnings.</p>
+                        <button class="buy-drone-btn" id="buy-harvester">
+                            Buy Harvester (<span id="harvester-cost">$50</span>)
+                        </button>
+                    </div>
+
+                    <!-- Planter Drone -->
+                    <div class="automation-card" id="auto-planter-card">
+                        <div class="card-header">
+                            <div>
+                                <span class="drone-title">Planter Drone</span>
+                                <span class="drone-count">Active: <span id="planter-count">0</span></span>
+                            </div>
+                            <span class="drone-emoji">🛰️</span>
+                        </div>
+                        <p class="description">Automatically plants selected seed in empty tiles.</p>
+                        <button class="buy-drone-btn" id="buy-planter">
+                            Buy Planter (<span id="planter-cost">$80</span>)
+                        </button>
+                    </div>
+
+                    <!-- Waterer Drone -->
+                    <div class="automation-card" id="auto-waterer-card">
+                        <div class="card-header">
+                            <div>
+                                <span class="drone-title">Waterer Drone</span>
+                                <span class="drone-count">Active: <span id="waterer-count">0</span></span>
+                            </div>
+                            <span class="drone-emoji">🌧️</span>
+                        </div>
+                        <p class="description">Automatically flies to dry tiles and waters them to max.</p>
+                        <button class="buy-drone-btn" id="buy-waterer">
+                            Buy Waterer (<span id="waterer-cost">$120</span>)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Upgrades Panel -->
+                <h2 style="margin-top: 20px;">⚡ Tech Upgrades</h2>
+                <div class="scroll-container">
+                    <div class="upgrades-list" id="upgrades-container">
+                        <!-- Upgrades will be injected here by JS -->
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <!-- Footer / Instructions Panel -->
+        <footer class="glass-card footer-bar">
+            <div class="info-group">
+                <h3>🎮 Keyboard Shortcuts</h3>
+                <p><code>1</code> Inspect | <code>2</code> Water Can | <code>3</code> Harvest | <code>Q / E</code> Cycle Seeds | <code>Esc</code> Deselect</p>
+            </div>
+            <div class="info-group">
+                <h3>🧬 Crop Genetics Info</h3>
+                <p>Multi-cell crops (Watermelon 2x1, Sunflower 1x2, Pumpkin 2x2) yield massive bonuses but require free space to plant!</p>
+            </div>
+            <div class="info-group">
+                <button class="synth-toggle" id="mute-btn">🔊 Sound On</button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Main Game Script -->
+    <script src="game.js"></script>
+</body>
+</html>
