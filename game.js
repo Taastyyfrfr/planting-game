@@ -884,6 +884,40 @@ function preRenderFloorBackgrounds() {
     }
 }
 
+function initGrid(preserveExisting = false) {
+    const newGrid = [];
+    for (let f = 0; f < 3; f++) {
+        newGrid.push([]);
+        for (let r = 0; r < gridSize; r++) {
+            newGrid[f].push([]);
+            for (let c = 0; c < gridSize; c++) {
+                newGrid[f][r].push({
+                    cropInstance: null,
+                    waterLevel: 0,
+                    reservedBy: null,
+                    waterReserved: false
+                });
+            }
+        }
+    }
+    
+    if (preserveExisting && grid && grid.length > 0) {
+        const oldGridSize = grid[0].length;
+        for (let f = 0; f < 3; f++) {
+            for (let r = 0; r < oldGridSize; r++) {
+                for (let c = 0; c < oldGridSize; c++) {
+                    if (r < gridSize && c < gridSize) {
+                        if (grid[f] && grid[f][r] && grid[f][r][c]) {
+                            newGrid[f][r][c] = grid[f][r][c];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    grid = newGrid;
+}
+
 // --- 6. BOUNDS CHECKING SAFE WRAPPER ---
 function getCell(floor, row, col) {
     if (floor < 0 || floor >= 3) return null;
