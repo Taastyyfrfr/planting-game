@@ -1,423 +1,8 @@
 /* ==========================================================================
-   NanoGarden - Core Game System (Graphics Overhaul & Dynamic Lighting)
+   NanoGarden - Core Game System (State Serialization & Detailed Graphics)
    ========================================================================== */
 
 // --- 1. GAME DATA & CONFIGURATION ---
-
-// Color palette definitions for procedural pixel art
-const PALETTE = {
-    '.': 'transparent',
-    '#': '#1e293b', // Dark outline
-    
-    // Grass & Foliage Greens
-    'g': '#10b981', // Medium Green (active neon green)
-    'G': '#064e3b', // Dark Forest Green
-    'l': '#34d399', // Light Sprout Green
-    'L': '#a7f3d0', // Pastel Mint Green
-    
-    // Soil & Seed Browns
-    'b': '#78350f', // Rich soil brown
-    'B': '#451a03', // Deep soil border
-    's': '#b45309', // Moist clay speckles
-    'w': '#1c1917', // Wet soil base (nearly black-brown)
-    'W': '#0c0a09', // Wet soil border (ultra dark)
-    'u': '#0ea5e9', // Water droplet speckle (blue)
-    'c': '#b45309', // Dry seed hull
-    'C': '#78350f', // Dark seed highlight
-    
-    // Crop Specific Colors
-    'o': '#f97316', // Carrot Orange
-    'O': '#ea580c', // Carrot Deep Orange shadow
-    
-    'r': '#ef4444', // Strawberry Red
-    'R': '#b91c1c', // Strawberry Dark Shadow Red
-    'y': '#fbbf24', // Yellow petals / Seeds
-    'Y': '#d97706', // Gold outline / Dark petal shade
-    
-    'm': '#15803d', // Watermelon Rind Light Green
-    'M': '#166534', // Watermelon Rind Dark Green
-    'p': '#fda4af', // Watermelon Inside Pink (not visible on whole melon)
-    
-    'd': '#78350f', // Plant Stem Brown
-    
-    'P': '#f97316', // Pumpkin Light Orange
-    'k': '#c2410c', // Pumpkin Rib/Shadow Dark Orange
-};
-
-// Raw Pixel Art Matrix Strings (16x16 or grid ratios)
-const GRASS_PIXELS = [
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGgGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGgGG",
-    "GGgGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGgGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGgGG",
-    "GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGG"
-];
-
-const SOIL_DRY_PIXELS = [
-    "BBBBBBBBBBBBBBBB",
-    "BssssssssssssssB",
-    "BsbbbbbbbbbbbbsB",
-    "BsbbbbbbbbbbbbsB",
-    "BsbbbsbbbbbbbbsB",
-    "BsbbbbbbbbbbbbsB",
-    "BsbbbbbbbbbbbbsB",
-    "BsbbbbbsbbbbbbsB",
-    "BsbbbbbbbbbbbbsB",
-    "BsbbbbbbbbbbbbsB",
-    "BsbbbsbbbbbbbbsB",
-    "BsbbbbbbbbbbbbsB",
-    "BsbbbbbbbbbbbbsB",
-    "BsbbbbbbbbbbbbsB",
-    "BssssssssssssssB",
-    "BBBBBBBBBBBBBBBB"
-];
-
-const SOIL_WET_PIXELS = [
-    "WWWWWWWWWWWWWWWW",
-    "WuuuuuuuuuuuuuuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuwWWWWuWWWWwuuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuwWWWWWWuWWwuuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuwWWWWuWWWWwuuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuwWWWWWWWWWWwuW",
-    "WuuuuuuuuuuuuuuW",
-    "WWWWWWWWWWWWWWWW"
-];
-
-const SEED_PIXELS = [
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    ".......cc.......",
-    "......cCCc......",
-    ".....cbbbbBc....",
-    "....cbbbbbbBc...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "................",
-    "................",
-    "................"
-];
-
-const SPROUT_PIXELS = [
-    "................",
-    "................",
-    "................",
-    "......l..l......",
-    "......gl.lg.....",
-    ".......g.g......",
-    ".......ggg......",
-    "........g.......",
-    ".....cbbbbBc....",
-    "....cbbbbbbBc...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "................",
-    "................",
-    "................"
-];
-
-// Carrot: 1x1 size
-const CARROT_GROWING = [
-    "................",
-    "................",
-    "........g.......",
-    "......g.g.g.....",
-    "......gg.gg.....",
-    ".......ggg......",
-    "........o.......",
-    ".......oOo......",
-    ".....cbbbbBc....",
-    "....cbbbbbbBc...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "................",
-    "................",
-    "................"
-];
-
-const CARROT_MATURE = [
-    "........g.......",
-    "......g.l.g.....",
-    ".....g.g.g.g....",
-    "......g.g.g.....",
-    ".......ggg......",
-    "......oooo......",
-    ".....ooOOoo.....",
-    ".....ooOOoo.....",
-    ".....cOObbBc....",
-    "....c.oO.bbBc...",
-    "......oO.bbbb...",
-    "......oO........",
-    "......o.........",
-    "......o.........",
-    "................",
-    "................"
-];
-
-// Strawberry: 1x1 size
-const STRAWBERRY_GROWING = [
-    "................",
-    "................",
-    "................",
-    ".......g........",
-    ".....ggggg......",
-    "....ggggggg.....",
-    ".....ggggg......",
-    "......rrr.......",
-    ".....cbbbbBc....",
-    "....cbbbbbbBc...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "................",
-    "................",
-    "................"
-];
-
-const STRAWBERRY_MATURE = [
-    "................",
-    "......gggg......",
-    "....gggggggg....",
-    "..gggggggggggg..",
-    ".ggggrggrgggrgg.",
-    "ggggrrrgrrgrrrgg",
-    "gggyrrryrrryrrrg",
-    "gggyrrryrrryrrrg",
-    ".ggggrggrgggrgg.",
-    "..cbbbbbbbbBc...",
-    ".cbbbbbbbbbbBc..",
-    ".cbbbbbbbbbbBc..",
-    "..bbbbbbbbbbb...",
-    "................",
-    "................",
-    "................"
-];
-
-// Watermelon: 2x1 size (32x16 pixels)
-const WATERMELON_GROWING = [
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "............mmmmmmmm............",
-    "..........mmmmmmmmmmmm..........",
-    "..........mmmmmmmmmmmm..........",
-    "............mmmmmmmm............",
-    "..........cbbbbbbbbBc...........",
-    ".........cbbbbbbbbbbBc..........",
-    ".........bbbbbbbbbbbbb..........",
-    ".........bbbbbbbbbbbbb..........",
-    "................................",
-    "................................",
-    "................................",
-    "................................"
-];
-
-const WATERMELON_MATURE = [
-    "................................",
-    "................dd..............",
-    "...............dggd.............",
-    "..........mmmmMllMmmmm..........",
-    "........mmmmmMMlllMMmmmmm.......",
-    "......mmmMlllMlllMlllMlllMmm....",
-    ".....mmMMlllllMlllllMlllllMMm...",
-    "....mMMlllllllMlllllllMllllllMm.",
-    "....mMMlllllllMlllllllMllllllMm.",
-    ".....mmMMlllllMlllllMlllllMMm...",
-    "......mmmMlllMlllMlllMlllMmm....",
-    "........mmmmmMMlllMMmmmmm.......",
-    "        cbbbbbbbbbbbbbbBc       ",
-    "       cbbbbbbbbbbbbbbbbBc      ",
-    "       bbbbbbbbbbbbbbbbbbb      ",
-    "................................"
-];
-
-// Sunflower: 1x2 size (16x32 pixels)
-const SUNFLOWER_GROWING = [
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "........yy......",
-    ".......yyyy.....",
-    ".......YyyY.....",
-    "........gg......",
-    "........gg......",
-    "......g.gg.g....",
-    ".......ggg......",
-    "........gg......",
-    "........gg......",
-    "........gg......",
-    ".....cbbbbBc....",
-    "....cbbbbbbBc...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................"
-];
-
-const SUNFLOWER_MATURE = [
-    "......yyyy......",
-    "....yyyyyyyy....",
-    "...yyyYccYyyy...",
-    "..yyyYcCCcYyyy..",
-    "..yyYcCCCCCcYy..",
-    "..yyYcCCCCCcYy..",
-    "..yyyYcCCcYyyy..",
-    "...yyyYccYyyy...",
-    "....yyyyyyyy....",
-    "......yyyy......",
-    "........gg......",
-    "........gg......",
-    "......g.gg.g....",
-    ".....gg.gg.gg...",
-    "........gg......",
-    "........gg......",
-    "........gg......",
-    "........gg......",
-    "......g.gg.g....",
-    ".....gg.gg.gg...",
-    "........gg......",
-    "........gg......",
-    "........gg......",
-    "........gg......",
-    ".....cbbbbBc....",
-    "....cbbbbbbBc...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "....bbbbbbbbb...",
-    "................",
-    "................",
-    "................"
-];
-
-// Pumpkin: 2x2 size (32x32 pixels)
-const PUMPKIN_GROWING = [
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "..............dd................",
-    ".............dggd...............",
-    "...........pppppppp.............",
-    "..........pppppppppp............",
-    ".........pppppppppppp...........",
-    ".........pppppppppppp...........",
-    ".........pppppppppppp...........",
-    "..........pppppppppp............",
-    "...........pppppppp.............",
-    "..........cbbbbbbBc.............",
-    ".........cbbbbbbbbBc............",
-    ".........bbbbbbbbbbb............",
-    ".........bbbbbbbbbbb............",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................",
-    "................................"
-];
-
-const PUMPKIN_MATURE = [
-    "................................",
-    "................................",
-    "................................",
-    "................dd..............",
-    "...............dggd.............",
-    ".............g.d.d.g............",
-    "............gg.....gg...........",
-    "          ppppppkkpppppp        ",
-    "        ppppppkkkkkkpppppp      ",
-    "      pppppppkkkkkkkkppppppp    ",
-    "     ppppppppkkkkkkkkpppppppp   ",
-    "    pppppppppkkkkkkkkppppppppp  ",
-    "   ppppppkkppkkkkkkkkppkkpppppp ",
-    "   pppppkkkppkkkkkkkkppkkkppppp ",
-    "  ppppppkkkppkkkkkkkkppkkkpppppp",
-    "  ppppppkkkppkkkkkkkkppkkkpppppp",
-    "  ppppppkkkppkkkkkkkkppkkkpppppp",
-    "   pppppkkkppkkkkkkkkppkkkppppp ",
-    "   ppppppkkppkkkkkkkkppkkpppppp ",
-    "    pppppppppkkkkkkkkppppppppp  ",
-    "     ppppppppkkkkkkkkpppppppp   ",
-    "      pppppppkkkkkkkkppppppp    ",
-    "        ppppppkkkkkkpppppp      ",
-    "          ppppppkkpppppp        ",
-    "          cbbbbbbbbbbBc         ",
-    "         cbbbbbbbbbbbbBc        ",
-    "        cbbbbbbbbbbbbbbBc       ",
-    "        bbbbbbbbbbbbbbbbb       ",
-    "................................",
-    "................................",
-    "................................",
-    "................................"
-];
-
-// Hydraulic Ascent Pipe: 1x1 size (16x16 pixels)
-const ASCENT_PIPE_PIXELS = [
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......",
-    "....##uu##......"
-];
 
 // --- 2. CROP DATABASE ---
 const CROPS = [
@@ -734,76 +319,522 @@ let lightmapCtx = null;
 // Silhouette temporary canvas for Dynamic Skew Shadow outlines
 let shadowSilhouetteCanvas = null;
 
-// --- 5. PROCEDURAL TEXTURE GENERATION ---
+// --- 5. HIGH-DENSITY PROCEDURAL TEXTURE GENERATORS (32x32 & 64x64) ---
+
+function drawGrassSprite(pCtx) {
+    pCtx.fillStyle = '#022c22'; // Deep jade green base
+    pCtx.fillRect(0, 0, 32, 32);
+    
+    pCtx.fillStyle = '#047857'; // Mid-tone emerald blades
+    const blades = [
+        [2, 4], [8, 12], [14, 2], [22, 18], [28, 8],
+        [4, 20], [12, 28], [18, 14], [24, 24], [30, 2]
+    ];
+    blades.forEach(pt => {
+        pCtx.fillRect(pt[0], pt[1], 2, 2);
+        pCtx.fillRect(pt[0] + 1, pt[1] - 1, 1, 2);
+    });
+    
+    pCtx.fillStyle = '#10b981'; // Neon green leaf tips
+    const tips = [
+        [3, 3], [9, 11], [15, 1], [23, 17], [29, 7],
+        [5, 19], [13, 27], [19, 13], [25, 23], [31, 1]
+    ];
+    tips.forEach(pt => {
+        pCtx.fillRect(pt[0], pt[1], 1, 1);
+    });
+}
+
+function drawDrySoilSprite(pCtx) {
+    pCtx.fillStyle = '#451a03'; // Deep soil border outline
+    pCtx.fillRect(0, 0, 32, 32);
+    
+    pCtx.fillStyle = '#78350f'; // Rich soil clay body
+    pCtx.fillRect(1, 1, 30, 30);
+    
+    // Scattered pebble outlines & textures
+    pCtx.fillStyle = '#b45309';
+    pCtx.fillRect(4, 6, 4, 3);
+    pCtx.fillRect(18, 12, 3, 3);
+    pCtx.fillRect(12, 22, 5, 2);
+    pCtx.fillRect(24, 20, 3, 4);
+    
+    pCtx.fillStyle = '#d97706'; // Gold clay highlights
+    pCtx.fillRect(5, 6, 1, 1);
+    pCtx.fillRect(19, 12, 1, 1);
+    pCtx.fillRect(13, 22, 1, 1);
+}
+
+function drawWetSoilSprite(pCtx) {
+    pCtx.fillStyle = '#0c0a09'; // Ultra dark wet soil border
+    pCtx.fillRect(0, 0, 32, 32);
+    
+    pCtx.fillStyle = '#1c1917'; // Wet mud base (nearly black)
+    pCtx.fillRect(1, 1, 30, 30);
+    
+    pCtx.fillStyle = '#451a03'; // Saturated dirt patches
+    pCtx.fillRect(5, 5, 6, 4);
+    pCtx.fillRect(16, 20, 5, 5);
+    pCtx.fillRect(22, 8, 4, 4);
+    
+    // Glowing water droplet reflections
+    pCtx.fillStyle = '#0ea5e9';
+    pCtx.fillRect(6, 6, 2, 2);
+    pCtx.fillRect(18, 22, 2, 2);
+    pCtx.fillRect(24, 9, 2, 2);
+    
+    pCtx.fillStyle = '#38bdf8'; // Sub-pixel specular glints
+    pCtx.fillRect(6, 6, 1, 1);
+    pCtx.fillRect(18, 22, 1, 1);
+}
+
+function drawSeedSprite(pCtx) {
+    pCtx.fillStyle = '#451a03'; // Outline
+    pCtx.fillRect(13, 22, 6, 4);
+    pCtx.fillStyle = '#78350f'; // Hull body
+    pCtx.fillRect(14, 21, 4, 4);
+    pCtx.fillStyle = '#b45309'; // Highlight
+    pCtx.fillRect(14, 21, 2, 2);
+}
+
+function drawSproutSprite(pCtx) {
+    // Stalk
+    pCtx.fillStyle = '#064e3b';
+    pCtx.fillRect(15, 18, 2, 8);
+    // Left Emerald leaf
+    pCtx.fillStyle = '#10b981';
+    pCtx.fillRect(11, 14, 4, 4);
+    pCtx.fillStyle = '#34d399'; // leaf highlight
+    pCtx.fillRect(12, 14, 2, 2);
+    
+    // Right Jade leaf
+    pCtx.fillStyle = '#047857';
+    pCtx.fillRect(17, 13, 4, 4);
+    pCtx.fillStyle = '#a7f3d0';
+    pCtx.fillRect(18, 13, 2, 2);
+}
+
+function drawCarrotGrowing(pCtx) {
+    pCtx.fillStyle = '#ea580c';
+    pCtx.fillRect(14, 16, 4, 8);
+    pCtx.fillStyle = '#f97316';
+    pCtx.fillRect(14, 16, 2, 6);
+    
+    pCtx.fillStyle = '#10b981';
+    pCtx.fillRect(13, 10, 2, 6);
+    pCtx.fillRect(17, 11, 2, 5);
+}
+
+function drawCarrotMature(pCtx) {
+    // Root core
+    pCtx.fillStyle = '#9a3412';
+    pCtx.beginPath();
+    pCtx.moveTo(11, 12);
+    pCtx.lineTo(21, 12);
+    pCtx.lineTo(16, 29);
+    pCtx.closePath();
+    pCtx.fill();
+    
+    pCtx.fillStyle = '#ea580c';
+    pCtx.beginPath();
+    pCtx.moveTo(12, 13);
+    pCtx.lineTo(20, 13);
+    pCtx.lineTo(16, 28);
+    pCtx.closePath();
+    pCtx.fill();
+    
+    pCtx.fillStyle = '#f97316';
+    pCtx.beginPath();
+    pCtx.moveTo(13, 13);
+    pCtx.lineTo(17, 13);
+    pCtx.lineTo(15, 26);
+    pCtx.closePath();
+    pCtx.fill();
+    
+    pCtx.fillStyle = '#ffedd5'; // Sub-pixel highlight top-left
+    pCtx.fillRect(13, 14, 2, 4);
+    pCtx.fillRect(14, 13, 4, 1);
+    
+    // Emerald foliage leaf sprays
+    pCtx.fillStyle = '#064e3b';
+    pCtx.fillRect(12, 4, 8, 8);
+    
+    pCtx.fillStyle = '#10b981';
+    pCtx.fillRect(13, 5, 2, 7);
+    pCtx.fillRect(17, 3, 2, 9);
+    
+    pCtx.fillStyle = '#34d399';
+    pCtx.fillRect(14, 6, 1, 4);
+    pCtx.fillRect(18, 4, 1, 5);
+}
+
+function drawStrawberryGrowing(pCtx) {
+    pCtx.fillStyle = '#b91c1c';
+    pCtx.fillRect(13, 16, 6, 6);
+    pCtx.fillStyle = '#10b981';
+    pCtx.fillRect(12, 12, 8, 4);
+}
+
+function drawStrawberryMature(pCtx) {
+    // Vine crowns
+    pCtx.fillStyle = '#064e3b';
+    pCtx.fillRect(8, 8, 16, 6);
+    pCtx.fillStyle = '#10b981';
+    pCtx.fillRect(10, 6, 12, 4);
+    
+    // Heart shape berry outline
+    pCtx.fillStyle = '#7f1d1d';
+    pCtx.beginPath();
+    pCtx.arc(13, 17, 5, 0, Math.PI * 2);
+    pCtx.arc(19, 17, 5, 0, Math.PI * 2);
+    pCtx.fill();
+    pCtx.fillRect(9, 17, 14, 6);
+    pCtx.beginPath();
+    pCtx.moveTo(9, 21);
+    pCtx.lineTo(23, 21);
+    pCtx.lineTo(16, 29);
+    pCtx.closePath();
+    pCtx.fill();
+    
+    // Main berry red flesh
+    pCtx.fillStyle = '#b91c1c';
+    pCtx.beginPath();
+    pCtx.arc(13, 17, 4, 0, Math.PI * 2);
+    pCtx.arc(19, 17, 4, 0, Math.PI * 2);
+    pCtx.fill();
+    pCtx.fillRect(10, 17, 12, 5);
+    pCtx.beginPath();
+    pCtx.moveTo(10, 21);
+    pCtx.lineTo(22, 21);
+    pCtx.lineTo(16, 28);
+    pCtx.closePath();
+    pCtx.fill();
+    
+    // Bright highlights
+    pCtx.fillStyle = '#ef4444';
+    pCtx.fillRect(11, 16, 4, 4);
+    pCtx.fillRect(17, 16, 4, 4);
+    pCtx.fillStyle = '#fca5a5'; // sub-pixel highlight
+    pCtx.fillRect(11, 16, 1, 1);
+    pCtx.fillRect(17, 16, 1, 1);
+    
+    // Gold Seed dots
+    pCtx.fillStyle = '#fbbf24';
+    pCtx.fillRect(12, 19, 1, 1.5);
+    pCtx.fillRect(19, 19, 1, 1.5);
+    pCtx.fillRect(15, 23, 1, 1.5);
+    pCtx.fillRect(17, 25, 1, 1.5);
+}
+
+function drawWatermelonGrowing(pCtx) {
+    pCtx.fillStyle = '#166534';
+    pCtx.fillRect(20, 10, 24, 12);
+}
+
+function drawWatermelonMature(pCtx) {
+    // Stem
+    pCtx.fillStyle = '#064e3b';
+    pCtx.fillRect(30, 4, 4, 6);
+    pCtx.fillRect(26, 6, 8, 2);
+    
+    // Outer outline
+    pCtx.fillStyle = '#022c22';
+    pCtx.beginPath();
+    pCtx.arc(22, 18, 10, 0, Math.PI * 2);
+    pCtx.arc(42, 18, 10, 0, Math.PI * 2);
+    pCtx.fill();
+    pCtx.fillRect(22, 8, 20, 20);
+    
+    // Rind body
+    pCtx.fillStyle = '#34d399';
+    pCtx.beginPath();
+    pCtx.arc(22, 18, 9, 0, Math.PI * 2);
+    pCtx.arc(42, 18, 9, 0, Math.PI * 2);
+    pCtx.fill();
+    pCtx.fillRect(22, 9, 20, 18);
+    
+    // Emerald rind stripes
+    pCtx.fillStyle = '#166534';
+    for (let x = 16; x < 48; x += 6) {
+        pCtx.fillRect(x, 11, 2.5, 14);
+        pCtx.fillRect(x + 2, 9, 1.5, 4);
+    }
+    
+    // Specular highlight on curve top
+    pCtx.fillStyle = '#a7f3d0';
+    pCtx.fillRect(20, 10, 24, 2);
+    pCtx.fillStyle = '#ffffff'; // sub-pixel lighting
+    pCtx.fillRect(22, 10, 6, 1);
+}
+
+function drawSunflowerGrowing(pCtx) {
+    pCtx.fillStyle = '#047857';
+    pCtx.fillRect(15, 20, 2, 30);
+    pCtx.fillStyle = '#f59e0b';
+    pCtx.fillRect(12, 14, 8, 8);
+}
+
+function drawSunflowerMature(pCtx) {
+    // Tall stalk
+    pCtx.fillStyle = '#022c22';
+    pCtx.fillRect(14, 18, 4, 46);
+    pCtx.fillStyle = '#10b981';
+    pCtx.fillRect(15, 18, 2, 46);
+    
+    // Jade leaves
+    pCtx.fillStyle = '#047857';
+    pCtx.fillRect(8, 36, 6, 4);
+    pCtx.fillRect(18, 44, 6, 4);
+    pCtx.fillStyle = '#34d399'; // highlight
+    pCtx.fillRect(9, 36, 4, 2);
+    pCtx.fillRect(19, 44, 4, 2);
+    
+    // Golden Petals
+    const cx = 16;
+    const cy = 16;
+    pCtx.fillStyle = '#d97706'; // copper shading
+    pCtx.beginPath();
+    pCtx.arc(cx, cy, 14, 0, Math.PI * 2);
+    pCtx.fill();
+    
+    pCtx.fillStyle = '#fbbf24'; // bright gold
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+        const px = cx + Math.cos(angle) * 11;
+        const py = cy + Math.sin(angle) * 11;
+        pCtx.fillRect(px - 2.5, py - 2.5, 5, 5);
+    }
+    
+    pCtx.fillStyle = '#f59e0b'; // secondary tone
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+        const px = cx + Math.cos(angle) * 10;
+        const py = cy + Math.sin(angle) * 10;
+        pCtx.fillRect(px - 1.5, py - 1.5, 3, 3);
+    }
+    
+    // Deep Copper Core
+    pCtx.fillStyle = '#451a03';
+    pCtx.beginPath();
+    pCtx.arc(cx, cy, 7, 0, Math.PI * 2);
+    pCtx.fill();
+    pCtx.fillStyle = '#78350f';
+    pCtx.beginPath();
+    pCtx.arc(cx, cy, 6, 0, Math.PI * 2);
+    pCtx.fill();
+    
+    // Center seeds grid
+    pCtx.fillStyle = '#b45309';
+    pCtx.fillRect(cx - 3, cy - 3, 2, 2);
+    pCtx.fillRect(cx + 1, cy - 3, 2, 2);
+    pCtx.fillRect(cx - 3, cy + 1, 2, 2);
+    pCtx.fillRect(cx + 1, cy + 1, 2, 2);
+    pCtx.fillStyle = '#fbbf24'; // seed specular dots
+    pCtx.fillRect(cx - 2, cy - 2, 1, 1);
+    pCtx.fillRect(cx + 2, cy - 2, 1, 1);
+}
+
+function drawPumpkinGrowing(pCtx) {
+    pCtx.fillStyle = '#c2410c';
+    pCtx.fillRect(20, 24, 24, 24);
+    pCtx.fillStyle = '#047857';
+    pCtx.fillRect(28, 16, 8, 8);
+}
+
+function drawPumpkinMature(pCtx) {
+    // Vine detail
+    pCtx.strokeStyle = '#047857';
+    pCtx.lineWidth = 2.5;
+    pCtx.beginPath();
+    pCtx.arc(32, 16, 12, Math.PI, Math.PI * 2);
+    pCtx.stroke();
+    
+    // Stem
+    pCtx.fillStyle = '#064e3b';
+    pCtx.fillRect(30, 8, 4, 10);
+    pCtx.fillStyle = '#10b981';
+    pCtx.fillRect(31, 8, 2, 9);
+    
+    // Core round outline
+    pCtx.fillStyle = '#7c2d12';
+    pCtx.beginPath();
+    pCtx.arc(24, 38, 18, 0, Math.PI * 2);
+    pCtx.arc(40, 38, 18, 0, Math.PI * 2);
+    pCtx.arc(32, 38, 20, 0, Math.PI * 2);
+    pCtx.fill();
+    
+    // Deep orange ribs
+    pCtx.fillStyle = '#ea580c';
+    pCtx.beginPath();
+    pCtx.arc(24, 38, 17, 0, Math.PI * 2);
+    pCtx.arc(40, 38, 17, 0, Math.PI * 2);
+    pCtx.arc(32, 38, 19, 0, Math.PI * 2);
+    pCtx.fill();
+    
+    pCtx.fillStyle = '#f97316'; // orange rib segments
+    pCtx.beginPath();
+    pCtx.arc(24, 38, 14, 0, Math.PI * 2);
+    pCtx.arc(40, 38, 14, 0, Math.PI * 2);
+    pCtx.fill();
+    
+    pCtx.beginPath();
+    pCtx.arc(32, 38, 16, 0, Math.PI * 2);
+    pCtx.fill();
+    
+    // Rib highlights
+    pCtx.fillStyle = '#fdba74';
+    pCtx.fillRect(20, 26, 4, 8);
+    pCtx.fillRect(30, 22, 4, 8);
+    pCtx.fillRect(40, 26, 4, 8);
+}
+
+function drawAscentPipeSprite(pCtx) {
+    // Steel Coupling base
+    pCtx.fillStyle = '#1e293b';
+    pCtx.fillRect(8, 26, 16, 6);
+    pCtx.fillStyle = '#475569';
+    pCtx.fillRect(9, 27, 14, 2);
+    pCtx.fillStyle = '#94a3b8';
+    pCtx.fillRect(10, 27, 4, 1);
+    
+    // Steel Coupling cap
+    pCtx.fillStyle = '#1e293b';
+    pCtx.fillRect(8, 0, 16, 6);
+    pCtx.fillStyle = '#475569';
+    pCtx.fillRect(9, 1, 14, 2);
+    pCtx.fillStyle = '#94a3b8';
+    pCtx.fillRect(10, 1, 4, 1);
+    
+    // High-contrast Glass Tube cylinder walls
+    pCtx.fillStyle = 'rgba(148, 163, 184, 0.22)';
+    pCtx.fillRect(10, 6, 12, 20);
+    
+    // Glowing cyan liquid
+    pCtx.fillStyle = '#0ea5e9';
+    pCtx.fillRect(11, 10, 10, 16);
+    pCtx.fillStyle = '#38bdf8';
+    pCtx.fillRect(12, 11, 8, 15);
+    
+    // Bubbles sub-pixels
+    pCtx.fillStyle = '#ffffff';
+    pCtx.fillRect(13, 13, 2, 2);
+    pCtx.fillRect(17, 18, 1.5, 1.5);
+    pCtx.fillRect(14, 22, 1, 1);
+    
+    // Specular sheen
+    pCtx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    pCtx.fillRect(11, 6, 1, 20);
+    pCtx.fillRect(20, 6, 1, 20);
+}
 
 function initSprites() {
-    // Generate Grass
-    sprites.grass = createOffscreenSprite(GRASS_PIXELS, 16, 16);
-    // Generate soils
-    sprites.soilDry = createOffscreenSprite(SOIL_DRY_PIXELS, 16, 16);
-    sprites.soilWet = createOffscreenSprite(SOIL_WET_PIXELS, 16, 16);
-    // Generate Shared growth steps
-    sprites.seed = createOffscreenSprite(SEED_PIXELS, 16, 16);
-    sprites.sprout = createOffscreenSprite(SPROUT_PIXELS, 16, 16);
+    // Generate Grass (32x32)
+    sprites.grass = document.createElement('canvas');
+    sprites.grass.width = 32;
+    sprites.grass.height = 32;
+    drawGrassSprite(sprites.grass.getContext('2d'));
     
-    // Crops Specific
-    sprites.carrot[2] = createOffscreenSprite(CARROT_GROWING, 16, 16);
-    sprites.carrot[3] = createOffscreenSprite(CARROT_MATURE, 16, 16);
+    // Generate Dry Soil
+    sprites.soilDry = document.createElement('canvas');
+    sprites.soilDry.width = 32;
+    sprites.soilDry.height = 32;
+    drawDrySoilSprite(sprites.soilDry.getContext('2d'));
     
-    sprites.strawberry[2] = createOffscreenSprite(STRAWBERRY_GROWING, 16, 16);
-    sprites.strawberry[3] = createOffscreenSprite(STRAWBERRY_MATURE, 16, 16);
+    // Generate Wet Soil
+    sprites.soilWet = document.createElement('canvas');
+    sprites.soilWet.width = 32;
+    sprites.soilWet.height = 32;
+    drawWetSoilSprite(sprites.soilWet.getContext('2d'));
     
-    sprites.watermelon[2] = createOffscreenSprite(WATERMELON_GROWING, 32, 16);
-    sprites.watermelon[3] = createOffscreenSprite(WATERMELON_MATURE, 32, 16);
+    // Seed
+    sprites.seed = document.createElement('canvas');
+    sprites.seed.width = 32;
+    sprites.seed.height = 32;
+    drawSeedSprite(sprites.seed.getContext('2d'));
     
-    sprites.sunflower[2] = createOffscreenSprite(SUNFLOWER_GROWING, 16, 32);
-    sprites.sunflower[3] = createOffscreenSprite(SUNFLOWER_MATURE, 16, 32);
+    // Sprout
+    sprites.sprout = document.createElement('canvas');
+    sprites.sprout.width = 32;
+    sprites.sprout.height = 32;
+    drawSproutSprite(sprites.sprout.getContext('2d'));
     
-    sprites.pumpkin[2] = createOffscreenSprite(PUMPKIN_GROWING, 32, 32);
-    sprites.pumpkin[3] = createOffscreenSprite(PUMPKIN_MATURE, 32, 32);
+    // Carrot
+    sprites.carrot[2] = document.createElement('canvas');
+    sprites.carrot[2].width = 32;
+    sprites.carrot[2].height = 32;
+    drawCarrotGrowing(sprites.carrot[2].getContext('2d'));
     
-    sprites['ascent pipe'][2] = createOffscreenSprite(ASCENT_PIPE_PIXELS, 16, 16);
-    sprites['ascent pipe'][3] = createOffscreenSprite(ASCENT_PIPE_PIXELS, 16, 16);
+    sprites.carrot[3] = document.createElement('canvas');
+    sprites.carrot[3].width = 32;
+    sprites.carrot[3].height = 32;
+    drawCarrotMature(sprites.carrot[3].getContext('2d'));
     
-    // Pre-render floor backgrounds once
+    // Strawberry
+    sprites.strawberry[2] = document.createElement('canvas');
+    sprites.strawberry[2].width = 32;
+    sprites.strawberry[2].height = 32;
+    drawStrawberryGrowing(sprites.strawberry[2].getContext('2d'));
+    
+    sprites.strawberry[3] = document.createElement('canvas');
+    sprites.strawberry[3].width = 32;
+    sprites.strawberry[3].height = 32;
+    drawStrawberryMature(sprites.strawberry[3].getContext('2d'));
+    
+    // Watermelon (64x32)
+    sprites.watermelon[2] = document.createElement('canvas');
+    sprites.watermelon[2].width = 64;
+    sprites.watermelon[2].height = 32;
+    drawWatermelonGrowing(sprites.watermelon[2].getContext('2d'));
+    
+    sprites.watermelon[3] = document.createElement('canvas');
+    sprites.watermelon[3].width = 64;
+    sprites.watermelon[3].height = 32;
+    drawWatermelonMature(sprites.watermelon[3].getContext('2d'));
+    
+    // Sunflower (32x64)
+    sprites.sunflower[2] = document.createElement('canvas');
+    sprites.sunflower[2].width = 32;
+    sprites.sunflower[2].height = 64;
+    drawSunflowerGrowing(sprites.sunflower[2].getContext('2d'));
+    
+    sprites.sunflower[3] = document.createElement('canvas');
+    sprites.sunflower[3].width = 32;
+    sprites.sunflower[3].height = 64;
+    drawSunflowerMature(sprites.sunflower[3].getContext('2d'));
+    
+    // Pumpkin (64x64)
+    sprites.pumpkin[2] = document.createElement('canvas');
+    sprites.pumpkin[2].width = 64;
+    sprites.pumpkin[2].height = 64;
+    drawPumpkinGrowing(sprites.pumpkin[2].getContext('2d'));
+    
+    sprites.pumpkin[3] = document.createElement('canvas');
+    sprites.pumpkin[3].width = 64;
+    sprites.pumpkin[3].height = 64;
+    drawPumpkinMature(sprites.pumpkin[3].getContext('2d'));
+    
+    // Ascent Pipe
+    sprites['ascent pipe'][2] = document.createElement('canvas');
+    sprites['ascent pipe'][2].width = 32;
+    sprites['ascent pipe'][2].height = 32;
+    drawAscentPipeSprite(sprites['ascent pipe'][2].getContext('2d'));
+    
+    sprites['ascent pipe'][3] = document.createElement('canvas');
+    sprites['ascent pipe'][3].width = 32;
+    sprites['ascent pipe'][3].height = 32;
+    drawAscentPipeSprite(sprites['ascent pipe'][3].getContext('2d'));
+    
     preRenderFloorBackgrounds();
 }
 
-function createOffscreenSprite(pixelData, w, h) {
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    const ctx = c.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
-    renderSpriteData(ctx, pixelData);
-    return c;
-}
-
-function renderSpriteData(ctx, data) {
-    for (let r = 0; r < data.length; r++) {
-        const row = data[r];
-        for (let c = 0; c < row.length; c++) {
-            const char = row[c];
-            const color = PALETTE[char];
-            if (color && color !== 'transparent') {
-                ctx.fillStyle = color;
-                ctx.fillRect(c, r, 1, 1);
-            }
-        }
-    }
-}
-
 function preRenderFloorBackgrounds() {
-    // 1. Floor 0 (Ground bed grass)
+    // 1. Floor 0 (Grass)
     grassPatternCanvas = document.createElement('canvas');
     grassPatternCanvas.width = 640;
     grassPatternCanvas.height = 640;
     const gCtx = grassPatternCanvas.getContext('2d');
     gCtx.imageSmoothingEnabled = false;
-    const gSize = 64;
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 10; c++) {
-            gCtx.drawImage(sprites.grass, c * gSize, r * gSize, gSize, gSize);
+    for (let r = 0; r < 20; r++) {
+        for (let c = 0; c < 20; c++) {
+            gCtx.drawImage(sprites.grass, c * 32, r * 32, 32, 32);
         }
     }
     
@@ -813,7 +844,7 @@ function preRenderFloorBackgrounds() {
     hydroBackgroundCanvas.height = 640;
     const hCtx = hydroBackgroundCanvas.getContext('2d');
     hCtx.imageSmoothingEnabled = false;
-    hCtx.fillStyle = '#0f172a'; // Deep slate metal base
+    hCtx.fillStyle = '#0f172a'; // Deep slate steel-blue
     hCtx.fillRect(0, 0, 640, 640);
     hCtx.strokeStyle = '#334155';
     hCtx.lineWidth = 1;
@@ -837,14 +868,14 @@ function preRenderFloorBackgrounds() {
     cCtx.imageSmoothingEnabled = false;
     cCtx.fillStyle = '#020617';
     cCtx.fillRect(0, 0, 640, 640);
-    cCtx.fillStyle = '#38bdf8'; // Pale blue dots for dome nodes
+    cCtx.fillStyle = '#38bdf8';
     for (let x = 0; x <= 640; x += 128) {
         cCtx.beginPath();
         cCtx.arc(x, x, 2, 0, Math.PI * 2);
         cCtx.arc(640 - x, x, 2, 0, Math.PI * 2);
         cCtx.fill();
     }
-    cCtx.fillStyle = '#fbbf24'; // Glowing stars
+    cCtx.fillStyle = '#fbbf24';
     for (let i = 0; i < 35; i++) {
         const sx = Math.random() * 640;
         const sy = Math.random() * 640;
@@ -853,40 +884,180 @@ function preRenderFloorBackgrounds() {
     }
 }
 
-// --- 6. GRID MANAGEMENT & PHYSICS ---
+// --- 6. BOUNDS CHECKING SAFE WRAPPER ---
+function getCell(floor, row, col) {
+    if (floor < 0 || floor >= 3) return null;
+    if (row < 0 || row >= gridSize) return null;
+    if (col < 0 || col >= gridSize) return null;
+    if (!grid || !grid[floor] || !grid[floor][row]) return null;
+    return grid[floor][row][col];
+}
 
-function initGrid(preserveExisting = false) {
-    const newGrid = [];
-    for (let f = 0; f < 3; f++) {
-        newGrid.push([]);
-        for (let r = 0; r < gridSize; r++) {
-            newGrid[f].push([]);
-            for (let c = 0; c < gridSize; c++) {
-                newGrid[f][r].push({
-                    cropInstance: null,
-                    waterLevel: 0,
-                    reservedBy: null,
-                    waterReserved: false
-                });
-            }
-        }
-    }
-    
-    if (preserveExisting && grid) {
-        const oldFloors = grid.length;
-        const oldSize = grid[0].length;
-        for (let f = 0; f < Math.min(3, oldFloors); f++) {
-            for (let r = 0; r < oldSize; r++) {
-                for (let c = 0; c < oldSize; c++) {
-                    if (r < gridSize && c < gridSize && r < oldSize && c < oldSize) {
-                        newGrid[f][r][c] = grid[f][r][c];
+// --- 7. STATE SERIALIZATION (LocalStorage) ---
+
+function saveGameState() {
+    try {
+        const activeCrops = [];
+        const cropsSeen = new Set();
+        for (let f = 0; f < 3; f++) {
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    const cell = getCell(f, r, c);
+                    if (cell && cell.cropInstance && !cropsSeen.has(cell.cropInstance.id)) {
+                        const crop = cell.cropInstance;
+                        cropsSeen.add(crop.id);
+                        activeCrops.push({
+                            id: crop.id,
+                            floor: crop.floor,
+                            row: crop.row,
+                            col: crop.col,
+                            typeName: crop.cropType.name,
+                            growth: crop.growth
+                        });
                     }
                 }
             }
         }
+        
+        const moistureData = [];
+        for (let f = 0; f < 3; f++) {
+            moistureData.push([]);
+            for (let r = 0; r < gridSize; r++) {
+                moistureData[f].push([]);
+                for (let c = 0; c < gridSize; c++) {
+                    const cell = getCell(f, r, c);
+                    moistureData[f][r].push(cell ? Math.round(cell.waterLevel) : 0);
+                }
+            }
+        }
+        
+        const droneData = drones.map(d => ({
+            type: d.type,
+            x: d.x,
+            y: d.y
+        }));
+        
+        const saveData = {
+            coins,
+            xp,
+            level,
+            harvestCount,
+            gridSize,
+            dayNightTime,
+            upgrades: {
+                gridSize: upgrades.gridSize.level,
+                growthSpeed: upgrades.growthSpeed.level,
+                autoSpeed: upgrades.autoSpeed.level,
+                waterDuration: upgrades.waterDuration.level
+            },
+            crops: activeCrops,
+            moisture: moistureData,
+            drones: droneData
+        };
+        
+        localStorage.setItem('nanogarden_save', JSON.stringify(saveData));
+    } catch (e) {
+        console.error("Auto-save error:", e);
     }
-    grid = newGrid;
 }
+
+function loadGameState() {
+    try {
+        const raw = localStorage.getItem('nanogarden_save');
+        if (!raw) return false;
+        
+        const saveData = JSON.parse(raw);
+        if (!saveData) return false;
+        
+        coins = saveData.coins ?? 20;
+        xp = saveData.xp ?? 0;
+        level = saveData.level ?? 1;
+        harvestCount = saveData.harvestCount ?? 0;
+        gridSize = saveData.gridSize ?? 6;
+        dayNightTime = saveData.dayNightTime ?? 15;
+        
+        // Restore upgrade records
+        if (saveData.upgrades) {
+            upgrades.gridSize.level = saveData.upgrades.gridSize ?? 0;
+            upgrades.growthSpeed.level = saveData.upgrades.growthSpeed ?? 1;
+            upgrades.growthSpeed.multiplier = upgrades.growthSpeed.multipliers[upgrades.growthSpeed.level - 1] ?? 1.0;
+            
+            upgrades.autoSpeed.level = saveData.upgrades.autoSpeed ?? 1;
+            upgrades.autoSpeed.multiplier = upgrades.autoSpeed.multipliers[upgrades.autoSpeed.level - 1] ?? 1.0;
+            
+            upgrades.waterDuration.level = saveData.upgrades.waterDuration ?? 1;
+            upgrades.waterDuration.value = upgrades.waterDuration.values[upgrades.waterDuration.level - 1] ?? 1.0;
+        }
+        
+        // Re-construct grid dimensions
+        initGrid(false);
+        
+        // Restore moisture levels
+        if (saveData.moisture) {
+            for (let f = 0; f < Math.min(3, saveData.moisture.length); f++) {
+                const floorM = saveData.moisture[f];
+                for (let r = 0; r < Math.min(gridSize, floorM.length); r++) {
+                    const rowM = floorM[r];
+                    for (let c = 0; c < Math.min(gridSize, rowM.length); c++) {
+                        const cell = getCell(f, r, c);
+                        if (cell) {
+                            cell.waterLevel = rowM[c] ?? 0;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Re-instantiate crop structures
+        if (saveData.crops) {
+            saveData.crops.forEach(cData => {
+                const cropType = CROPS.find(cr => cr.name === cData.typeName);
+                if (cropType) {
+                    const cropInstance = {
+                        id: cData.id ?? Math.random().toString(36).substr(2, 9),
+                        cropType: cropType,
+                        row: cData.row,
+                        col: cData.col,
+                        floor: cData.floor,
+                        growth: cData.growth ?? 0,
+                        isHarvestReserved: false
+                    };
+                    
+                    // Assign to cell indices
+                    for (let r = cData.row; r < cData.row + cropType.height; r++) {
+                        for (let c = cData.col; c < cData.col + cropType.width; c++) {
+                            const cell = getCell(cData.floor, r, c);
+                            if (cell) {
+                                cell.cropInstance = cropInstance;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Re-spawn drones
+        drones = [];
+        harvesterCount = 0;
+        planterCount = 0;
+        watererCount = 0;
+        if (saveData.drones) {
+            saveData.drones.forEach(d => {
+                drones.push(new Drone(Math.random(), d.type, d.x, d.y));
+                if (d.type === 'harvester') harvesterCount++;
+                if (d.type === 'planter') planterCount++;
+                if (d.type === 'waterer') watererCount++;
+            });
+        }
+        
+        return true;
+    } catch (e) {
+        console.error("Load save error:", e);
+        return false;
+    }
+}
+
+// --- 8. GRID MANAGEMENT & ACTIONS ---
 
 function resizeCanvas() {
     canvas.width = 640;
@@ -897,7 +1068,6 @@ function resizeCanvas() {
     gridOffsetY = (640 - gridPixelSize) / 2;
     cellSize = gridPixelSize / gridSize;
     
-    // Safety check for drones out of bounds
     drones.forEach(d => {
         if (d.x < -100 || d.x > canvas.width + 100 || d.y < -1500 || d.y > 800) {
             d.x = canvas.width / 2;
@@ -918,15 +1088,15 @@ function getCellFromCoords(x, y) {
 }
 
 function plantCrop(floor, row, col, cropType) {
-    // Bounds verify
     if (row < 0 || row + cropType.height > gridSize || col < 0 || col + cropType.width > gridSize) {
         return false;
     }
     
-    // Fit verify
+    // Fit space verification
     for (let r = row; r < row + cropType.height; r++) {
         for (let c = col; c < col + cropType.width; c++) {
-            if (grid[floor][r][c].cropInstance || (grid[floor][r][c].reservedBy && grid[floor][r][c].reservedBy !== 'planter')) {
+            const cell = getCell(floor, r, c);
+            if (!cell || cell.cropInstance || (cell.reservedBy && cell.reservedBy !== 'planter')) {
                 return false;
             }
         }
@@ -938,14 +1108,16 @@ function plantCrop(floor, row, col, cropType) {
         row: row,
         col: col,
         floor: floor,
-        growth: cropType.isStructure ? 100 : 0, // Structures are fully built immediately
+        growth: cropType.isStructure ? 100 : 0,
         isHarvestReserved: false
     };
     
-    // Populate cell pointers
     for (let r = row; r < row + cropType.height; r++) {
         for (let c = col; c < col + cropType.width; c++) {
-            grid[floor][r][c].cropInstance = cropInstance;
+            const cell = getCell(floor, r, c);
+            if (cell) {
+                cell.cropInstance = cropInstance;
+            }
         }
     }
     
@@ -955,16 +1127,17 @@ function plantCrop(floor, row, col, cropType) {
     const py = gridOffsetY + (row + cropType.height / 2) * cellSize - floor * 640;
     spawnPlantParticles(px, py);
     
+    saveGameState(); // Autosave action
     return true;
 }
 
 function harvestCropAt(floor, row, col) {
-    const cell = grid[floor] && grid[floor][row] ? grid[floor][row][col] : null;
+    const cell = getCell(floor, row, col);
     if (!cell || !cell.cropInstance) return false;
     
     const crop = cell.cropInstance;
     
-    // Hydraulic Ascent Pipe removal refund
+    // Remove structures
     if (crop.cropType.isStructure) {
         coins += Math.round(crop.cropType.cost / 2);
         SoundFX.playHarvest();
@@ -975,13 +1148,29 @@ function harvestCropAt(floor, row, col) {
         spawnHarvestParticles(px, py);
         spawnTextParticle(px, py, `Refunded`, 'var(--accent)');
         
+        // Memory Leak Sweep: Clear drone target bindings immediately
+        drones.forEach(d => {
+            if (d.targetCrop === crop) {
+                d.targetCrop = null;
+                d.state = 'idle';
+            }
+            if (d.targetCell && d.targetCell.floor === floor && d.targetCell.row === crop.row && d.targetCell.col === crop.col) {
+                d.targetCell = null;
+                d.state = 'idle';
+            }
+        });
+        
         for (let r = crop.row; r < crop.row + crop.cropType.height; r++) {
             for (let c = crop.col; c < crop.col + crop.cropType.width; c++) {
-                grid[floor][r][c].cropInstance = null;
-                grid[floor][r][c].reservedBy = null;
+                const targetCell = getCell(floor, r, c);
+                if (targetCell) {
+                    targetCell.cropInstance = null;
+                    targetCell.reservedBy = null;
+                }
             }
         }
         updateUI();
+        saveGameState();
         return true;
     }
     
@@ -1003,51 +1192,43 @@ function harvestCropAt(floor, row, col) {
     spawnTextParticle(px, py - 12, `+$${revenue}`, 'var(--accent)');
     spawnTextParticle(px, py + 12, `+${xpReward} XP`, 'var(--upgrade)');
     
-    // Reset occupied cells
+    // Memory Leak Sweep: Clear drone targets
+    drones.forEach(d => {
+        if (d.targetCrop === crop) {
+            d.targetCrop = null;
+            d.state = 'idle';
+        }
+    });
+    
     for (let r = crop.row; r < crop.row + crop.cropType.height; r++) {
         for (let c = crop.col; c < crop.col + crop.cropType.width; c++) {
-            grid[floor][r][c].cropInstance = null;
-            grid[floor][r][c].reservedBy = null;
+            const targetCell = getCell(floor, r, c);
+            if (targetCell) {
+                targetCell.cropInstance = null;
+                targetCell.reservedBy = null;
+            }
         }
     }
     
     updateUI();
+    saveGameState();
     return true;
 }
 
-function findEmptySpotFor(floor, width, height) {
-    for (let r = 0; r <= gridSize - height; r++) {
-        for (let c = 0; c <= gridSize - width; c++) {
-            let isFit = true;
-            for (let tr = r; tr < r + height; tr++) {
-                for (let tc = c; tc < c + width; tc++) {
-                    if (grid[floor][tr][tc].cropInstance || grid[floor][tr][tc].reservedBy) {
-                        isFit = false;
-                        break;
-                    }
-                }
-                if (!isFit) break;
-            }
-            if (isFit) {
-                return { row: r, col: c };
-            }
-        }
+// --- 9. PARTICLE PHYSICS SYSTEM (Capped at 150) ---
+
+function addParticle(p) {
+    particles.push(p);
+    
+    // Memory Leak Sweep: Strict bounding cap
+    if (particles.length > 150) {
+        particles.splice(0, particles.length - 150);
     }
-    return null;
 }
-
-function triggerShakeEffect() {
-    const wrapper = document.querySelector('.canvas-wrapper');
-    wrapper.classList.remove('shake');
-    void wrapper.offsetWidth; // Force reflow
-    wrapper.classList.add('shake');
-}
-
-// --- 7. PARTICLE PHYSICS SYSTEM ---
 
 function spawnWaterParticles(x, y, count = 8) {
     for (let i = 0; i < count; i++) {
-        particles.push({
+        addParticle({
             x: x,
             y: y,
             vx: (Math.random() - 0.5) * 50,
@@ -1077,11 +1258,11 @@ function spawnWaterParticles(x, y, count = 8) {
     }
 }
 
-function spawnHarvestParticles(x, y, count = 15) {
+function spawnHarvestParticles(x, y, count = 12) {
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 50 + Math.random() * 80;
-        particles.push({
+        addParticle({
             x: x,
             y: y,
             vx: Math.cos(angle) * speed,
@@ -1118,7 +1299,7 @@ function spawnPlantParticles(x, y) {
     for (let i = 0; i < 8; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 25 + Math.random() * 30;
-        particles.push({
+        addParticle({
             x: x,
             y: y,
             vx: Math.cos(angle) * speed,
@@ -1145,7 +1326,7 @@ function spawnPlantParticles(x, y) {
 }
 
 function spawnTextParticle(x, y, text, color) {
-    particles.push({
+    addParticle({
         x: x,
         y: y,
         vy: -35 - Math.random() * 15,
@@ -1177,10 +1358,10 @@ function spawnTextParticle(x, y, text, color) {
 function spawnLevelUpParticles() {
     const cx = canvas.width / 2;
     const cy = canvas.height / 2 - activeFloor * 640;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 30; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 100 + Math.random() * 120;
-        particles.push({
+        addParticle({
             x: cx,
             y: cy,
             vx: Math.cos(angle) * speed,
@@ -1216,13 +1397,13 @@ function spawnLevelUpParticles() {
     spawnTextParticle(cx, cy - 35, "LEVEL UP!", "var(--primary)");
 }
 
-// --- 8. AUTOMATION DRONES AGENT CLASS ---
+// --- 10. AUTOMATION DRONES ---
 class Drone {
     constructor(id, type, x, y) {
         this.id = id;
-        this.type = type; // 'harvester', 'planter', 'waterer'
+        this.type = type;
         this.x = x;
-        this.y = y; // global Y coordinates
+        this.y = y;
         this.tx = x;
         this.ty = y;
         this.state = 'idle';
@@ -1271,7 +1452,8 @@ class Drone {
                         
                         for (let r = tc.row; r < tc.row + tc.cropType.height; r++) {
                             for (let c = tc.col; c < tc.col + tc.cropType.width; c++) {
-                                grid[tc.floor][r][c].reservedBy = null;
+                                const cell = getCell(tc.floor, r, c);
+                                if (cell) cell.reservedBy = null;
                             }
                         }
                         this.targetCell = null;
@@ -1287,7 +1469,7 @@ class Drone {
                 this.y += Math.sin(angle) * Math.min(step, dist);
                 
                 if (Math.random() < 0.22) {
-                    particles.push({
+                    addParticle({
                         x: this.x,
                         y: this.y + 6,
                         vx: -Math.cos(angle) * 15 + (Math.random() - 0.5) * 8,
@@ -1312,7 +1494,7 @@ class Drone {
         
         if (this.state === 'watering') {
             if (this.targetCell) {
-                const cell = grid[this.targetCell.floor][this.targetCell.row][this.targetCell.col];
+                const cell = getCell(this.targetCell.floor, this.targetCell.row, this.targetCell.col);
                 if (cell) {
                     cell.waterLevel = Math.min(100, cell.waterLevel + 160 * dt);
                     
@@ -1349,8 +1531,8 @@ class Drone {
             for (let f = 2; f >= 0; f--) {
                 for (let r = 0; r < gridSize; r++) {
                     for (let c = 0; c < gridSize; c++) {
-                        const cell = grid[f][r][c];
-                        if (cell.cropInstance && !cell.cropInstance.cropType.isStructure && cell.cropInstance.growth >= 100 && !cell.cropInstance.isHarvestReserved) {
+                        const cell = getCell(f, r, c);
+                        if (cell && cell.cropInstance && !cell.cropInstance.cropType.isStructure && cell.cropInstance.growth >= 100 && !cell.cropInstance.isHarvestReserved) {
                             const crop = cell.cropInstance;
                             crop.isHarvestReserved = true;
                             this.targetCrop = crop;
@@ -1373,7 +1555,8 @@ class Drone {
                 if (spot) {
                     for (let r = spot.row; r < spot.row + cropType.height; r++) {
                         for (let c = spot.col; c < spot.col + cropType.width; c++) {
-                            grid[f][r][c].reservedBy = 'planter';
+                            const cell = getCell(f, r, c);
+                            if (cell) cell.reservedBy = 'planter';
                         }
                     }
                     
@@ -1397,8 +1580,8 @@ class Drone {
             for (let f = 0; f < 3; f++) {
                 for (let r = 0; r < gridSize; r++) {
                     for (let c = 0; c < gridSize; c++) {
-                        const cell = grid[f][r][c];
-                        if (cell.waterLevel < 25 && !cell.waterReserved) {
+                        const cell = getCell(f, r, c);
+                        if (cell && cell.waterLevel < 25 && !cell.waterReserved) {
                             cell.waterReserved = true;
                             this.targetCell = { floor: f, row: r, col: c };
                             
@@ -1475,17 +1658,15 @@ class Drone {
     }
 }
 
-// --- 9. RENDER LOOP FUNCTIONS ---
+// --- 11. RENDER LOOP SYSTEM ---
 
 function drawBackground() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-// Dynamic Silhouette Shadow drawing function
 function drawCropShadow(ctx, sprite, px, py, pw, ph) {
     if (!shadowSilhouetteCanvas) return;
     
-    // Set silhouette canvas dimensions
     shadowSilhouetteCanvas.width = pw;
     shadowSilhouetteCanvas.height = ph;
     
@@ -1493,21 +1674,17 @@ function drawCropShadow(ctx, sprite, px, py, pw, ph) {
     sCtx.clearRect(0, 0, pw, ph);
     sCtx.drawImage(sprite, 0, 0, pw, ph);
     
-    // Overwrite pixels with dark semi-transparent shadow outline
     sCtx.globalCompositeOperation = 'source-in';
     sCtx.fillStyle = 'rgba(0, 0, 0, 0.38)';
     sCtx.fillRect(0, 0, pw, ph);
     
     ctx.save();
-    // Translate origin to the base center of the crop
     ctx.translate(px + pw / 2, py + ph);
     
-    // Apply dynamic skew vector and squash mapping based on day-night sun vector
     const skewX = -Math.cos(theta) * 0.85;
     const scaleY = Math.abs(Math.sin(theta)) * 0.22 + 0.08;
     ctx.transform(1, 0, skewX, scaleY, 0, 0);
     
-    // Translate origin back and draw shadow silhouette
     ctx.translate(-pw / 2, -ph);
     ctx.drawImage(shadowSilhouetteCanvas, 0, 0, pw, ph);
     ctx.restore();
@@ -1520,22 +1697,24 @@ function updateSoilAndCrops(dt) {
     
     const isNight = Math.sin(theta) <= 0;
     
-    // 1. Water pumping logic for Hydraulic Ascent Pipes
+    // 1. Hydraulic Ascent pipe routing
     for (let f = 0; f < 2; f++) {
         for (let r = 0; r < gridSize; r++) {
             for (let c = 0; c < gridSize; c++) {
-                const cell = grid[f][r][c];
-                if (cell.cropInstance && cell.cropInstance.cropType.name === 'Ascent Pipe') {
+                const cell = getCell(f, r, c);
+                if (cell && cell.cropInstance && cell.cropInstance.cropType.name === 'Ascent Pipe') {
                     if (cell.waterLevel > 0) {
-                        const flow = Math.min(cell.waterLevel, 15 * dt); // pumps at 15%/sec
+                        const flow = Math.min(cell.waterLevel, 15 * dt);
                         cell.waterLevel -= flow;
-                        grid[f + 1][r][c].waterLevel = Math.min(100, grid[f + 1][r][c].waterLevel + flow);
+                        const upperCell = getCell(f + 1, r, c);
+                        if (upperCell) {
+                            upperCell.waterLevel = Math.min(100, upperCell.waterLevel + flow);
+                        }
                         
-                        // Spawn upward bubble particles
                         if (Math.random() < 0.22) {
                             const px = gridOffsetX + c * cellSize + cellSize / 2;
                             const pyStart = gridOffsetY + r * cellSize + cellSize / 2 - f * 640;
-                            particles.push({
+                            addParticle({
                                 x: px + (Math.random() - 0.5) * 8,
                                 y: pyStart,
                                 targetY: pyStart - 640,
@@ -1564,12 +1743,11 @@ function updateSoilAndCrops(dt) {
         }
     }
     
-    // 2. Loop over Z-axis floors
+    // 2. Loop over levels
     for (let f = 0; f < 3; f++) {
         const floorYOffset = currentScrollY - f * 640;
         const isFloorVisible = (floorYOffset > -640 && floorYOffset < 640);
         
-        // Frustum Culling checks
         if (isFloorVisible) {
             let bgCanvas = grassPatternCanvas;
             if (f === 1) bgCanvas = hydroBackgroundCanvas;
@@ -1579,8 +1757,7 @@ function updateSoilAndCrops(dt) {
                 ctx.drawImage(bgCanvas, 0, floorYOffset);
             }
             
-            // PBR-like Material Effects
-            // Floor 1 (Hydroponics): metallic reflective sheen lines moving with light angle
+            // Floor 1 metallic reflection sheen
             if (f === 1) {
                 const sheenOffset = ((sunX / 2) + 320) % 640;
                 ctx.save();
@@ -1593,7 +1770,7 @@ function updateSoilAndCrops(dt) {
                 ctx.restore();
             }
             
-            // Floor 2 (Canopy): glass specular dome stroke outline
+            // Floor 2 dome reflections
             if (f === 2) {
                 ctx.save();
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
@@ -1604,7 +1781,6 @@ function updateSoilAndCrops(dt) {
                 ctx.restore();
             }
             
-            // Raised wooden garden bed border frame
             const startX = gridOffsetX - 8;
             const startY = gridOffsetY - 8 + floorYOffset;
             const bedWidth = gridSize * cellSize + 16;
@@ -1617,40 +1793,41 @@ function updateSoilAndCrops(dt) {
             ctx.fillRect(startX, startY, bedWidth, bedHeight);
             ctx.strokeRect(startX, startY, bedWidth, bedHeight);
             
-            // Soil cutout base
             ctx.fillStyle = '#1c1917';
             ctx.fillRect(gridOffsetX, gridOffsetY + floorYOffset, gridSize * cellSize, gridSize * cellSize);
             ctx.restore();
         }
         
-        // Soil cell updates
+        // Soils
         for (let r = 0; r < gridSize; r++) {
             for (let c = 0; c < gridSize; c++) {
-                const cell = grid[f][r][c];
-                if (cell.waterLevel > 0) {
-                    cell.waterLevel = Math.max(0, cell.waterLevel - evaporationRate * dt);
-                }
-                
-                if (isFloorVisible) {
-                    const px = gridOffsetX + c * cellSize;
-                    const py = gridOffsetY + r * cellSize + floorYOffset;
-                    
-                    ctx.drawImage(sprites.soilDry, px, py, cellSize, cellSize);
+                const cell = getCell(f, r, c);
+                if (cell) {
                     if (cell.waterLevel > 0) {
-                        ctx.globalAlpha = cell.waterLevel / 100;
-                        ctx.drawImage(sprites.soilWet, px, py, cellSize, cellSize);
-                        ctx.globalAlpha = 1.0;
+                        cell.waterLevel = Math.max(0, cell.waterLevel - evaporationRate * dt);
+                    }
+                    
+                    if (isFloorVisible) {
+                        const px = gridOffsetX + c * cellSize;
+                        const py = gridOffsetY + r * cellSize + floorYOffset;
+                        
+                        ctx.drawImage(sprites.soilDry, px, py, cellSize, cellSize);
+                        if (cell.waterLevel > 0) {
+                            ctx.globalAlpha = cell.waterLevel / 100;
+                            ctx.drawImage(sprites.soilWet, px, py, cellSize, cellSize);
+                            ctx.globalAlpha = 1.0;
+                        }
                     }
                 }
             }
         }
         
-        // Crop rendering & growth simulation
+        // Crops
         const drawnCrops = new Set();
         for (let r = 0; r < gridSize; r++) {
             for (let c = 0; c < gridSize; c++) {
-                const cell = grid[f][r][c];
-                if (cell.cropInstance && !drawnCrops.has(cell.cropInstance.id)) {
+                const cell = getCell(f, r, c);
+                if (cell && cell.cropInstance && !drawnCrops.has(cell.cropInstance.id)) {
                     const crop = cell.cropInstance;
                     drawnCrops.add(crop.id);
                     
@@ -1658,11 +1835,14 @@ function updateSoilAndCrops(dt) {
                     let cellCount = 0;
                     for (let tr = crop.row; tr < crop.row + crop.cropType.height; tr++) {
                         for (let tc = crop.col; tc < crop.col + crop.cropType.width; tc++) {
-                            totalWater += grid[f][tr][tc].waterLevel;
-                            cellCount++;
+                            const innerCell = getCell(f, tr, tc);
+                            if (innerCell) {
+                                totalWater += innerCell.waterLevel;
+                                cellCount++;
+                            }
                         }
                     }
-                    const avgWater = totalWater / cellCount;
+                    const avgWater = cellCount > 0 ? (totalWater / cellCount) : 0;
                     
                     if (!crop.cropType.isStructure && crop.growth < 100) {
                         const waterBonus = 1 + (avgWater / 100) * 1.5;
@@ -1670,7 +1850,6 @@ function updateSoilAndCrops(dt) {
                         crop.growth = Math.min(100, crop.growth + baseGrowthRate * growthUpgradeMultiplier * waterBonus * dt);
                     }
                     
-                    // Render if visible
                     if (isFloorVisible) {
                         const px = gridOffsetX + crop.col * cellSize;
                         const py = gridOffsetY + crop.row * cellSize + floorYOffset;
@@ -1683,10 +1862,10 @@ function updateSoilAndCrops(dt) {
                         else if (crop.growth >= 18) stage = 1;
                         else stage = 0;
                         
-                        // Level of Detail (LOD) crop sprite selections
+                        // LOD sprites scaling
                         let sprite = null;
                         if (f === activeFloor) {
-                            // LOD 0 (Detailed): Full sprite resolution
+                            // LOD 0 (Detailed)
                             if (stage === 0) sprite = sprites.seed;
                             else if (stage === 1) sprite = sprites.sprout;
                             else {
@@ -1694,7 +1873,7 @@ function updateSoilAndCrops(dt) {
                                 sprite = sprites[nameLower] ? sprites[nameLower][stage] : null;
                             }
                         } else {
-                            // LOD 1 (Simplified): Draw lower resolution sprout/growing sprite
+                            // LOD 1 (Simplified)
                             if (crop.growth < 55) {
                                 sprite = sprites.sprout;
                             } else {
@@ -1703,24 +1882,21 @@ function updateSoilAndCrops(dt) {
                             }
                         }
                         
-                        // Draw Dynamic Drop Shadow Outline before the crop itself
                         if (sprite) {
                             drawCropShadow(ctx, sprite, px, py, pw, ph);
                             ctx.drawImage(sprite, px, py, pw, ph);
                         }
                         
-                        // Draw growth bars (only on active floor, LOD 0)
                         if (f === activeFloor && !crop.cropType.isStructure && crop.growth < 100) {
                             drawGrowthBar(px, py, pw, ph, crop.growth);
                         }
                         
-                        // PBR-like Emissive glowing maps at night for mature crops
+                        // Emissive glows at night
                         if (isNight && crop.growth >= 100) {
                             const nameLower = crop.cropType.name.toLowerCase();
                             ctx.save();
                             
                             if (nameLower === 'strawberry') {
-                                // Glowing yellow seeds
                                 ctx.fillStyle = '#fde047';
                                 ctx.shadowColor = '#fde047';
                                 ctx.shadowBlur = 4;
@@ -1728,7 +1904,6 @@ function updateSoilAndCrops(dt) {
                                 ctx.fillRect(px + 2 * pw / 3, py + ph / 3, 1.5, 1.5);
                                 ctx.fillRect(px + pw / 2, py + 2 * ph / 3, 1.5, 1.5);
                             } else if (nameLower === 'watermelon') {
-                                // Glowing neon stripes
                                 ctx.strokeStyle = '#4ade80';
                                 ctx.shadowColor = '#4ade80';
                                 ctx.shadowBlur = 4;
@@ -1742,7 +1917,6 @@ function updateSoilAndCrops(dt) {
                                 ctx.lineTo(px + 3 * pw / 4, py + 2 * ph / 3);
                                 ctx.stroke();
                             } else if (nameLower === 'sunflower') {
-                                // Glowing gold halo around flower head
                                 ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
                                 ctx.shadowColor = '#f59e0b';
                                 ctx.shadowBlur = 8;
@@ -1751,12 +1925,10 @@ function updateSoilAndCrops(dt) {
                                 ctx.arc(px + pw / 2, py + ph / 4, pw / 3.2, 0, Math.PI * 2);
                                 ctx.stroke();
                             } else if (nameLower === 'pumpkin') {
-                                // Glowing Jack-o'-lantern carved face
                                 ctx.fillStyle = '#f97316';
                                 ctx.shadowColor = '#ea580c';
                                 ctx.shadowBlur = 10;
                                 
-                                // Triangle eye left
                                 ctx.beginPath();
                                 ctx.moveTo(px + pw / 3 - 1, py + ph / 2.8);
                                 ctx.lineTo(px + pw / 3 - 5, py + ph / 2.8 + 6);
@@ -1764,7 +1936,6 @@ function updateSoilAndCrops(dt) {
                                 ctx.closePath();
                                 ctx.fill();
                                 
-                                // Triangle eye right
                                 ctx.beginPath();
                                 ctx.moveTo(px + 2 * pw / 3 - 1, py + ph / 2.8);
                                 ctx.lineTo(px + 2 * pw / 3 - 5, py + ph / 2.8 + 6);
@@ -1772,7 +1943,6 @@ function updateSoilAndCrops(dt) {
                                 ctx.closePath();
                                 ctx.fill();
                                 
-                                // Carved mouth
                                 ctx.beginPath();
                                 ctx.moveTo(px + pw / 3.8, py + ph / 2 + 3);
                                 ctx.lineTo(px + pw / 3, py + ph / 2 + 7);
@@ -1783,7 +1953,6 @@ function updateSoilAndCrops(dt) {
                                 ctx.closePath();
                                 ctx.fill();
                             }
-                            
                             ctx.restore();
                         }
                     }
@@ -1793,29 +1962,244 @@ function updateSoilAndCrops(dt) {
     }
 }
 
-// Lightmap Caching Builder
+function drawGrowthBar(x, y, w, h, growth) {
+    const barW = w - 16;
+    const barH = 5;
+    const barX = x + 8;
+    const barY = y + h - 8;
+    
+    ctx.save();
+    ctx.fillStyle = 'var(--bg-dark)';
+    ctx.fillRect(barX, barY, barW, barH);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+    
+    ctx.fillStyle = 'var(--primary)';
+    ctx.fillRect(barX + 0.5, barY + 0.5, (barW - 1) * (growth / 100), barH - 1);
+    ctx.restore();
+}
+
+function drawHoverPreview() {
+    const hoverCell = getCellFromCoords(mouseX, mouseY);
+    if (!hoverCell) return;
+    
+    const r = hoverCell.row;
+    const c = hoverCell.col;
+    
+    const floorYOffset = currentScrollY - activeFloor * 640;
+    
+    if (selectedSeed) {
+        const cropType = selectedSeed;
+        
+        let fits = true;
+        if (r + cropType.height > gridSize || c + cropType.width > gridSize) {
+            fits = false;
+        } else {
+            for (let tr = r; tr < r + cropType.height; tr++) {
+                for (let tc = c; tc < c + cropType.width; tc++) {
+                    const cell = getCell(activeFloor, tr, tc);
+                    if (!cell || cell.cropInstance || cell.reservedBy) {
+                        fits = false;
+                        break;
+                    }
+                }
+                if (!fits) break;
+            }
+        }
+        
+        const px = gridOffsetX + c * cellSize;
+        const py = gridOffsetY + r * cellSize + floorYOffset;
+        const pw = cropType.width * cellSize;
+        const ph = cropType.height * cellSize;
+        
+        ctx.save();
+        if (fits) {
+            ctx.strokeStyle = 'rgba(52, 211, 153, 0.85)';
+            ctx.fillStyle = 'rgba(52, 211, 153, 0.18)';
+            ctx.shadowColor = 'rgba(52, 211, 153, 0.45)';
+        } else {
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
+            ctx.shadowColor = 'rgba(239, 68, 68, 0.45)';
+        }
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
+        ctx.fillRect(px + 2, py + 2, pw - 4, ph - 4);
+        
+        const cropSprites = sprites[cropType.name.toLowerCase()];
+        const sprite = cropSprites ? (cropSprites[3] || cropSprites[2]) : sprites.sprout;
+        if (sprite) {
+            ctx.globalAlpha = 0.4;
+            ctx.drawImage(sprite, px, py, pw, ph);
+        }
+        ctx.restore();
+    } else {
+        const cellData = getCell(activeFloor, r, c);
+        if (!cellData) return;
+        
+        if (selectedTool === 'water') {
+            const px = gridOffsetX + c * cellSize;
+            const py = gridOffsetY + r * cellSize + floorYOffset;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(14, 165, 233, 0.8)';
+            ctx.fillStyle = 'rgba(14, 165, 233, 0.12)';
+            ctx.shadowColor = 'rgba(14, 165, 233, 0.4)';
+            ctx.shadowBlur = 8;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+            ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+            ctx.restore();
+        } else if (selectedTool === 'harvest') {
+            if (cellData.cropInstance) {
+                const crop = cellData.cropInstance;
+                const px = gridOffsetX + crop.col * cellSize;
+                const py = gridOffsetY + crop.row * cellSize + (currentScrollY - crop.floor * 640);
+                const pw = crop.cropType.width * cellSize;
+                const ph = crop.cropType.height * cellSize;
+                
+                ctx.save();
+                if (crop.growth >= 100 || crop.cropType.isStructure) {
+                    ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
+                    ctx.fillStyle = 'rgba(245, 158, 11, 0.18)';
+                    ctx.shadowColor = 'rgba(245, 158, 11, 0.45)';
+                } else {
+                    ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+                    ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
+                    ctx.shadowColor = 'rgba(239, 68, 68, 0.45)';
+                }
+                ctx.shadowBlur = 8;
+                ctx.lineWidth = 2.5;
+                ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
+                ctx.fillRect(px + 2, py + 2, pw - 4, ph - 4);
+                ctx.restore();
+            }
+        } else if (selectedTool === 'inspect') {
+            let px = gridOffsetX + c * cellSize;
+            let py = gridOffsetY + r * cellSize + floorYOffset;
+            let pw = cellSize;
+            let ph = cellSize;
+            
+            if (cellData.cropInstance) {
+                const crop = cellData.cropInstance;
+                px = gridOffsetX + crop.col * cellSize;
+                py = gridOffsetY + crop.row * cellSize + (currentScrollY - crop.floor * 640);
+                pw = crop.cropType.width * cellSize;
+                ph = crop.cropType.height * cellSize;
+            }
+            
+            ctx.save();
+            ctx.strokeStyle = 'rgba(248, 250, 252, 0.7)';
+            ctx.setLineDash([4, 4]);
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
+            ctx.restore();
+        }
+    }
+}
+
+function drawDiagnostics() {
+    if (!noclipEnabled) return;
+    
+    ctx.save();
+    ctx.font = 'bold 9px monospace';
+    
+    for (let f = 0; f < 3; f++) {
+        const floorYOffset = currentScrollY - f * 640;
+        if (floorYOffset > -640 && floorYOffset < 640) {
+            const drawnCrops = new Set();
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    const cell = getCell(f, r, c);
+                    if (cell) {
+                        if (cell.cropInstance && !drawnCrops.has(cell.cropInstance.id)) {
+                            const crop = cell.cropInstance;
+                            drawnCrops.add(crop.id);
+                            
+                            const px = gridOffsetX + crop.col * cellSize;
+                            const py = gridOffsetY + crop.row * cellSize + floorYOffset;
+                            const pw = crop.cropType.width * cellSize;
+                            const ph = crop.cropType.height * cellSize;
+                            
+                            ctx.strokeStyle = '#ec4899';
+                            ctx.lineWidth = 1.5;
+                            ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
+                            
+                            const rootX = px + pw / 2;
+                            const rootYStart = py + ph - 4;
+                            const rootDepth = crop.cropType.isStructure ? 4 : (25 * (crop.growth / 100) + 4);
+                            ctx.strokeStyle = '#22c55e';
+                            ctx.beginPath();
+                            ctx.moveTo(rootX, rootYStart);
+                            ctx.lineTo(rootX, rootYStart + rootDepth);
+                            ctx.stroke();
+                            
+                            ctx.fillStyle = '#ec4899';
+                            ctx.fillText(`${crop.cropType.name.replace(' ', '')} (F${f})`, px + 4, py + 12);
+                            ctx.fillStyle = '#22c55e';
+                            ctx.fillText(`Root:${Math.round(rootDepth)}px`, px + 4, py + ph - 6);
+                        }
+                        
+                        if (cell.reservedBy) {
+                            const px = gridOffsetX + c * cellSize;
+                            const py = gridOffsetY + r * cellSize + floorYOffset;
+                            ctx.strokeStyle = '#eab308';
+                            ctx.strokeRect(px + 3, py + 3, cellSize - 6, cellSize - 6);
+                            ctx.fillStyle = '#eab308';
+                            ctx.fillText(`RSV:${cell.reservedBy}`, px + 6, py + 14);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    drones.forEach(d => {
+        const drawY = d.y + currentScrollY;
+        
+        if (d.state === 'moving') {
+            ctx.strokeStyle = '#a855f7';
+            ctx.setLineDash([2, 4]);
+            ctx.beginPath();
+            ctx.moveTo(d.x, drawY);
+            ctx.lineTo(d.tx, d.ty + currentScrollY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(d.x, drawY, 12, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#06b6d4';
+        ctx.fillText(`${d.type.toUpperCase()}:${d.state}`, d.x - 24, drawY - 16);
+    });
+    
+    ctx.restore();
+}
+
 function drawLightmap() {
     if (!lightmapCtx) return;
     const lCtx = lightmapCtx;
     
-    // 1. Clear with ambient daylight / moonlight color
     lCtx.fillStyle = ambientColor;
     lCtx.fillRect(0, 0, 160, 160);
     
-    // 2. Set screen blend mode to accumulate light sources
     lCtx.globalCompositeOperation = 'screen';
     
-    // 3. Directional sun/moon glow
     const lSunX = (sunX / 640) * 160;
     const lSunY = (sunY / 640) * 160;
     const isNight = Math.sin(theta) <= 0;
     
     const sunGlow = lCtx.createRadialGradient(lSunX, lSunY, 5, lSunX, lSunY, 80);
     if (!isNight) {
-        sunGlow.addColorStop(0, 'rgba(253, 224, 71, 0.45)'); // sun yellow
+        sunGlow.addColorStop(0, 'rgba(253, 224, 71, 0.45)');
         sunGlow.addColorStop(1, 'rgba(253, 224, 71, 0)');
     } else {
-        sunGlow.addColorStop(0, 'rgba(186, 230, 253, 0.32)'); // moon silver
+        sunGlow.addColorStop(0, 'rgba(186, 230, 253, 0.32)');
         sunGlow.addColorStop(1, 'rgba(186, 230, 253, 0)');
     }
     lCtx.fillStyle = sunGlow;
@@ -1823,16 +2207,15 @@ function drawLightmap() {
     lCtx.arc(lSunX, lSunY, 80, 0, Math.PI * 2);
     lCtx.fill();
     
-    // 4. Drone point lights
     drones.forEach(d => {
         const ldX = (d.x / 640) * 160;
         const ldY = ((d.y + currentScrollY) / 640) * 160;
         
         if (ldY > -20 && ldY < 180) {
             let color = 'rgba(16, 185, 129, 0.8)';
-            if (d.type === 'harvester') color = 'rgba(6, 182, 212, 0.9)'; // Cyan
-            else if (d.type === 'planter') color = 'rgba(245, 158, 11, 0.9)'; // Gold
-            else if (d.type === 'waterer') color = 'rgba(56, 189, 248, 0.9)'; // Water blue
+            if (d.type === 'harvester') color = 'rgba(6, 182, 212, 0.9)';
+            else if (d.type === 'planter') color = 'rgba(245, 158, 11, 0.9)';
+            else if (d.type === 'waterer') color = 'rgba(56, 189, 248, 0.9)';
             
             const droneGlow = lCtx.createRadialGradient(ldX, ldY, 2, ldX, ldY, 22);
             droneGlow.addColorStop(0, color);
@@ -1846,7 +2229,6 @@ function drawLightmap() {
         }
     });
     
-    // 5. Cursor spotlight
     if (mouseX >= 0 && mouseX <= 640 && mouseY >= 0 && mouseY <= 640) {
         const lmX = (mouseX / 640) * 160;
         const lmY = (mouseY / 640) * 160;
@@ -1865,7 +2247,7 @@ function drawLightmap() {
     lCtx.globalCompositeOperation = 'source-over';
 }
 
-// --- 10. MAIN SYSTEM LOOP ---
+// --- 12. MAIN SYSTEM LOOP ---
 let lastTime = performance.now();
 
 function gameLoop(currentTime) {
@@ -1875,24 +2257,19 @@ function gameLoop(currentTime) {
     if (dt > 0.1) dt = 0.1;
     lastTime = currentTime;
     
-    // 1. Dynamic day/night sun cycle progression (60 seconds loop)
     dayNightTime = (dayNightTime + dt) % 60;
     theta = (dayNightTime / 60) * Math.PI * 2;
     
-    // Sun position calculations
     sunX = canvas.width / 2 + Math.cos(theta) * 320;
     sunY = canvas.height / 2 + Math.sin(theta) * 320;
     
-    // Calculate lightmap ambient colors
     if (Math.sin(theta) > 0) {
-        // Daytime
         const factor = Math.sin(theta);
         const r = Math.floor(180 + factor * 75);
         const g = Math.floor(180 + factor * 75);
         const b = Math.floor(190 + factor * 65);
         ambientColor = `rgb(${r}, ${g}, ${b})`;
     } else {
-        // Nighttime
         const factor = Math.abs(Math.sin(theta));
         const r = Math.floor(30 - factor * 15);
         const g = Math.floor(30 - factor * 15);
@@ -1900,42 +2277,34 @@ function gameLoop(currentTime) {
         ambientColor = `rgb(${r}, ${g}, ${b})`;
     }
     
-    // Animate elevator viewport scrolling offsets
     currentScrollY += (activeFloor * 640 - currentScrollY) * 9 * dt;
     
-    // Clear canvas
     drawBackground();
     
-    // Update grid soil values & crops growth states
     updateSoilAndCrops(dt);
     
-    // Draw selection highlights under the pointer
     drawHoverPreview();
     
-    // Render diagnostics if active
     drawDiagnostics();
     
-    // Update & render active particles (drawn with viewport scroll offset)
     particles.forEach(p => p.update(dt));
     particles = particles.filter(p => !p.isDead());
     particles.forEach(p => p.draw(ctx));
     
-    // Update & render active drones
     drones.forEach(d => {
         d.update(dt);
         d.draw(ctx);
     });
     
-    // 2. Render dynamic lightmap multiply overlay
     drawLightmap();
     ctx.save();
-    ctx.imageSmoothingEnabled = true; // smooth light scaling blur
+    ctx.imageSmoothingEnabled = true;
     ctx.globalCompositeOperation = 'multiply';
     ctx.drawImage(lightmapCanvas, 0, 0, 640, 640);
     ctx.restore();
 }
 
-// --- 11. STATS & PROGRESSION UPDATES ---
+// --- 13. STATS & PROGRESSION UPDATES ---
 
 function addXP(amount) {
     xp += amount;
@@ -1948,7 +2317,6 @@ function addXP(amount) {
         spawnLevelUpParticles();
         
         let msg = `Level UP! You reached level ${level}!`;
-        
         CROPS.forEach(c => {
             if (level === c.unlockLevel) {
                 msg += ` Unlocked ${c.name}!`;
@@ -1961,6 +2329,7 @@ function addXP(amount) {
         buildUpgrades();
     }
     updateUI();
+    saveGameState();
 }
 
 function updateUI() {
@@ -1988,7 +2357,6 @@ function updateUI() {
     document.getElementById('buy-planter').disabled = coins < pCost;
     document.getElementById('buy-waterer').disabled = coins < wCost;
     
-    // Update Day/Night indicator elements
     const isNight = Math.sin(theta) <= 0;
     const timeIcon = document.getElementById('time-icon');
     const timeText = document.getElementById('time-text');
@@ -2003,7 +2371,8 @@ function updateUI() {
     for (let f = 0; f < 3; f++) {
         for (let r = 0; r < gridSize; r++) {
             for (let c = 0; c < gridSize; c++) {
-                if (grid[f][r][c].cropInstance) {
+                const cell = getCell(f, r, c);
+                if (cell && cell.cropInstance) {
                     hasAnyCrop = true;
                     break;
                 }
@@ -2029,7 +2398,7 @@ function showTicker(text) {
     document.getElementById('ticker-text').innerText = text;
 }
 
-// --- 12. SHOP & TOOL UI BUILDERS ---
+// --- 14. SHOP & TOOL UI BUILDERS ---
 
 function buildCropShop() {
     const shopList = document.getElementById('crop-shop');
@@ -2077,7 +2446,7 @@ function buildCropShop() {
             const cropSprites = sprites[nameLower];
             const sprite = cropSprites ? (cropSprites[3] || cropSprites[2]) : sprites.sprout;
             if (sprite) {
-                pCtx.drawImage(sprite, 0, 0);
+                pCtx.drawImage(sprite, 0, 0, previewCanvas.width, previewCanvas.height);
             }
         }
     });
@@ -2087,7 +2456,7 @@ function buildUpgrades() {
     const container = document.getElementById('upgrades-container');
     container.innerHTML = '';
     
-    // 1. Grid Size Upgrade
+    // 1. Grid Size
     {
         const currentLvl = upgrades.gridSize.level;
         const maxLvl = upgrades.gridSize.maxLevel;
@@ -2116,7 +2485,7 @@ function buildUpgrades() {
         container.appendChild(item);
     }
     
-    // 2. Growth Speed Upgrade
+    // 2. Growth Speed
     {
         const currentLvl = upgrades.growthSpeed.level;
         const maxLvl = upgrades.growthSpeed.maxLevel;
@@ -2145,7 +2514,7 @@ function buildUpgrades() {
         container.appendChild(item);
     }
     
-    // 3. Automation Speed Upgrade
+    // 3. Automation Speed
     {
         const currentLvl = upgrades.autoSpeed.level;
         const maxLvl = upgrades.autoSpeed.maxLevel;
@@ -2174,7 +2543,7 @@ function buildUpgrades() {
         container.appendChild(item);
     }
     
-    // 4. Moisture Retention Upgrade
+    // 4. Moisture Retention
     {
         const currentLvl = upgrades.waterDuration.level;
         const maxLvl = upgrades.waterDuration.maxLevel;
@@ -2204,7 +2573,7 @@ function buildUpgrades() {
     }
 }
 
-// --- 13. UPGRADE PURCHASE EVENT HANDLERS ---
+// --- 15. UPGRADE ACTIONS ---
 
 function buyGridUpgrade(cost, nextSize) {
     coins -= cost;
@@ -2215,6 +2584,7 @@ function buyGridUpgrade(cost, nextSize) {
     showTicker(`Expanded garden plots grid to ${nextSize}x${nextSize}!`);
     updateUI();
     buildUpgrades();
+    saveGameState();
 }
 
 function buyGrowthUpgrade(cost) {
@@ -2225,6 +2595,7 @@ function buyGrowthUpgrade(cost) {
     showTicker(`Crops growth speed boosted to ${upgrades.growthSpeed.multiplier}x!`);
     updateUI();
     buildUpgrades();
+    saveGameState();
 }
 
 function buyAutoSpeedUpgrade(cost) {
@@ -2235,6 +2606,7 @@ function buyAutoSpeedUpgrade(cost) {
     showTicker(`Automation drones speed increased to ${upgrades.autoSpeed.multiplier}x!`);
     updateUI();
     buildUpgrades();
+    saveGameState();
 }
 
 function buyWaterDurationUpgrade(cost) {
@@ -2245,22 +2617,18 @@ function buyWaterDurationUpgrade(cost) {
     showTicker(`Soil water evaporation speed divided by ${upgrades.waterDuration.value}x!`);
     updateUI();
     buildUpgrades();
+    saveGameState();
 }
 
-// --- 14. SELECTION CONTROL FUNCTIONS ---
+// --- 16. SELECTIONS ---
 
 function selectTool(toolName) {
     selectedSeed = null;
     selectedTool = toolName;
     
     document.querySelectorAll('.crop-card').forEach(card => card.classList.remove('selected'));
-    
     document.querySelectorAll('.tool-btn').forEach(btn => {
-        if (btn.dataset.tool === toolName) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        btn.classList.toggle('active', btn.dataset.tool === toolName);
     });
     
     showTicker(`Tool selected: ${toolName.toUpperCase()}`);
@@ -2272,13 +2640,8 @@ function selectSeed(crop) {
     selectedTool = null;
     
     document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-    
     document.querySelectorAll('.crop-card').forEach((card, index) => {
-        if (CROPS[index] === crop) {
-            card.classList.add('selected');
-        } else {
-            card.classList.remove('selected');
-        }
+        card.classList.toggle('selected', CROPS[index] === crop);
     });
     
     showTicker(`Seed selected: ${crop.name} | Cost: $${crop.cost} | Grid footprint: ${crop.width}x${crop.height}`);
@@ -2290,11 +2653,7 @@ function deselectAll() {
     
     document.querySelectorAll('.crop-card').forEach(card => card.classList.remove('selected'));
     document.querySelectorAll('.tool-btn').forEach(btn => {
-        if (btn.dataset.tool === 'inspect') {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        btn.classList.toggle('active', btn.dataset.tool === 'inspect');
     });
     
     showTicker(`Seed cleared. Inspection tool active.`);
@@ -2335,37 +2694,40 @@ function switchFloor(floor) {
     showTicker(`Elevator shifted to Floor ${floor}: ${floor === 0 ? 'F0: Ground Bed' : (floor === 1 ? 'F1: Hydroponics' : 'F2: Bio-Dome Canopy')}`);
 }
 
-// --- 15. INITIALIZATION & LISTENERS ---
+// --- 17. INITIALIZATION & BINDINGS ---
 
 function init() {
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     
-    // Lightmap canvas caching initialization
     lightmapCanvas = document.createElement('canvas');
     lightmapCanvas.width = 160;
     lightmapCanvas.height = 160;
     lightmapCtx = lightmapCanvas.getContext('2d');
     
-    // Silhouette canvas caching initialization
     shadowSilhouetteCanvas = document.createElement('canvas');
     
-    // Render procedural sprite sheets & backgrounds
+    // Generate Procedural texture sheets
     initSprites();
     
-    // Create grid layouts
+    // Grid memory allocation
     initGrid(false);
     
-    // Build lists & elements
+    // Load Game State if exists
+    const hasSave = loadGameState();
+    
     buildCropShop();
     buildUpgrades();
     updateUI();
     
-    // Default tool state
+    // Default tool
     selectTool('inspect');
     
-    // Elevator buttons click registration
+    // Auto-save interval (every 5 seconds)
+    setInterval(saveGameState, 5000);
+    
+    // Elevator selectors
     for (let f = 0; f < 3; f++) {
         const btn = document.getElementById(`btn-floor-${f}`);
         if (btn) {
@@ -2375,13 +2737,14 @@ function init() {
         }
     }
     
-    // Canvas dimensions setup
+    // Window Resize event listeners leak sweep
+    window.removeEventListener('resize', resizeCanvas);
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
     
     // --- Mouse listeners ---
     canvas.addEventListener('mousedown', (e) => {
-        SoundFX.init(); // Autoplay unlock
+        SoundFX.init();
         
         const rect = canvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -2411,8 +2774,8 @@ function init() {
             }
         } else {
             if (selectedTool === 'inspect') {
-                const cellData = grid[activeFloor][r][c];
-                if (cellData.cropInstance) {
+                const cellData = getCell(activeFloor, r, c);
+                if (cellData && cellData.cropInstance) {
                     const crop = cellData.cropInstance;
                     
                     let timeLeft = 0;
@@ -2424,11 +2787,14 @@ function init() {
                     let count = 0;
                     for (let tr = crop.row; tr < crop.row + crop.cropType.height; tr++) {
                         for (let tc = crop.col; tc < crop.col + crop.cropType.width; tc++) {
-                            totalWater += grid[activeFloor][tr][tc].waterLevel;
-                            count++;
+                            const innerCell = getCell(activeFloor, tr, tc);
+                            if (innerCell) {
+                                totalWater += innerCell.waterLevel;
+                                count++;
+                            }
                         }
                     }
-                    const avgWater = Math.round(totalWater / count);
+                    const avgWater = count > 0 ? Math.round(totalWater / count) : 0;
                     
                     if (crop.cropType.isStructure) {
                         showTicker(`[Inspect] ${crop.cropType.name} (F${activeFloor}) | Structure is fully active | Soil Moisture: ${avgWater}%`);
@@ -2436,18 +2802,20 @@ function init() {
                         showTicker(`[Inspect] ${crop.cropType.name} (F${activeFloor}) | Growth: ${Math.round(crop.growth)}% (${crop.growth >= 100 ? 'Mature' : timeLeft.toFixed(1) + 's remaining'}) | Soil Moisture: ${avgWater}%`);
                     }
                 } else {
-                    showTicker(`[Inspect] Empty garden plot on F${activeFloor}. Soil Moisture: ${Math.round(grid[activeFloor][r][c].waterLevel)}%`);
+                    const moistureVal = cellData ? Math.round(cellData.waterLevel) : 0;
+                    showTicker(`[Inspect] Empty garden plot on F${activeFloor}. Soil Moisture: ${moistureVal}%`);
                 }
                 SoundFX.playClick();
             } else if (selectedTool === 'water') {
-                const cellData = grid[activeFloor][r][c];
-                if (cellData.waterLevel < 100) {
+                const cellData = getCell(activeFloor, r, c);
+                if (cellData && cellData.waterLevel < 100) {
                     cellData.waterLevel = Math.min(100, cellData.waterLevel + 45);
                     SoundFX.playWater();
                     
                     const yGlobal = y - activeFloor * 640;
                     spawnWaterParticles(x, yGlobal, 6);
                     showTicker(`Watered soil plot!`);
+                    saveGameState();
                 }
             } else if (selectedTool === 'harvest') {
                 const success = harvestCropAt(activeFloor, r, c);
@@ -2508,6 +2876,7 @@ function init() {
             showTicker(`Acquired Harvester Drone!`);
             updateUI();
             buildUpgrades();
+            saveGameState();
         }
     });
     
@@ -2521,6 +2890,7 @@ function init() {
             showTicker(`Acquired Planter Drone!`);
             updateUI();
             buildUpgrades();
+            saveGameState();
         }
     });
     
@@ -2534,6 +2904,7 @@ function init() {
             showTicker(`Acquired Waterer Drone!`);
             updateUI();
             buildUpgrades();
+            saveGameState();
         }
     });
     
@@ -2544,6 +2915,14 @@ function init() {
         muteBtn.innerText = isMuted ? '🔇 Muted' : '🔊 Sound On';
         muteBtn.style.borderColor = isMuted ? 'var(--error)' : 'rgba(255,255,255,0.1)';
         SoundFX.playClick();
+    });
+    
+    // Reset Progress action
+    document.getElementById('reset-btn').addEventListener('click', () => {
+        if (confirm("Are you sure you want to reset your garden progress? This will delete all coins, crops, upgrades, and drones.")) {
+            localStorage.removeItem('nanogarden_save');
+            location.reload();
+        }
     });
     
     document.getElementById('btn-noclip').addEventListener('click', () => {
@@ -2558,7 +2937,7 @@ function init() {
         });
     });
     
-    // Run loop
+    // Start main game loop
     requestAnimationFrame(gameLoop);
 }
 
