@@ -77,6 +77,16 @@
 
             <!-- Center: The Canvas Sandbox -->
             <section class="canvas-panel">
+                <div class="glass-card elevator-panel">
+                    <div class="elevator-label">🛗 Floor Elevator</div>
+                    <div class="elevator-buttons">
+                        <button class="floor-btn" id="btn-floor-2" data-floor="2">F2: Canopy</button>
+                        <button class="floor-btn" id="btn-floor-1" data-floor="1">F1: Hydro</button>
+                        <button class="floor-btn active" id="btn-floor-0" data-floor="0">F0: Ground</button>
+                    </div>
+                    <button class="diag-toggle-btn" id="btn-noclip">🛠️ Noclip Hud</button>
+                </div>
+                
                 <div class="canvas-wrapper glass-card">
                     <canvas id="gameCanvas"></canvas>
                     <div id="canvas-overlay-text" class="hidden">Click on the grid to plant/interact!</div>
@@ -154,7 +164,7 @@
         <footer class="glass-card footer-bar">
             <div class="info-group">
                 <h3>🎮 Keyboard Shortcuts</h3>
-                <p><code>1</code> Inspect | <code>2</code> Water Can | <code>3</code> Harvest | <code>Q / E</code> Cycle Seeds | <code>Esc</code> Deselect</p>
+                <p><code>1</code> Inspect | <code>2</code> Water | <code>3</code> Harvest | <code>Q/E</code> Seeds | <code>W/S</code> Elev. Up/Down | <code>N</code> Noclip | <code>Esc</code> Clear</p>
             </div>
             <div class="info-group">
                 <h3>🧬 Crop Genetics Info</h3>
