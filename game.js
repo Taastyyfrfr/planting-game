@@ -231,6 +231,9 @@ let theta = 0; // sun angle
 let sunX = 320;
 let sunY = 100;
 let ambientColor = 'rgb(220, 220, 220)';
+let weatherTimer = 0;
+let isRaining = false;
+let rainDuration = 0;
 
 // Z-Axis Multi-Tier state
 let activeFloor = 0; // 0 = Ground Bed, 1 = Hydroponics, 2 = Canopy
@@ -1121,6 +1124,37 @@ function getCellFromCoords(x, y) {
     return null;
 }
 
+function findEmptySpotFor(floor, width, height) {
+    for (let r = 0; r <= gridSize - height; r++) {
+        for (let c = 0; c <= gridSize - width; c++) {
+            let isFit = true;
+            for (let tr = r; tr < r + height; tr++) {
+                for (let tc = c; tc < c + width; tc++) {
+                    const cell = getCell(floor, tr, tc);
+                    if (!cell || cell.cropInstance || cell.reservedBy) {
+                        isFit = false;
+                        break;
+                    }
+                }
+                if (!isFit) break;
+            }
+            if (isFit) return { row: r, col: c };
+        }
+    }
+    return null;
+}
+
+function triggerShakeEffect() {
+    const wrapper = document.querySelector('.canvas-wrapper');
+    if (!wrapper) return;
+    wrapper.classList.remove('shake');
+    void wrapper.offsetWidth;
+    wrapper.classList.add('shake');
+}
+
+let lastHarvestTime = 0;
+let comboCount = 0;
+
 function plantCrop(floor, row, col, cropType) {
     if (row < 0 || row + cropType.height > gridSize || col < 0 || col + cropType.width > gridSize) {
         return false;
@@ -1136,6 +1170,7 @@ function plantCrop(floor, row, col, cropType) {
         }
     }
     
+    const isGolden = !cropType.isStructure && Math.random() < 0.08;
     const cropInstance = {
         id: Math.random().toString(36).substr(2, 9),
         cropType: cropType,
@@ -1143,6 +1178,7 @@ function plantCrop(floor, row, col, cropType) {
         col: col,
         floor: floor,
         growth: cropType.isStructure ? 100 : 0,
+        isGolden: isGolden,
         isHarvestReserved: false
     };
     
@@ -1161,7 +1197,11 @@ function plantCrop(floor, row, col, cropType) {
     const py = gridOffsetY + (row + cropType.height / 2) * cellSize - floor * 640;
     spawnPlantParticles(px, py);
     
-    saveGameState(); // Autosave action
+    if (isGolden) {
+        spawnTextParticle(px, py - 16, '🌟 GOLDEN SEED!', '#fbbf24');
+    }
+    
+    saveGameState();
     return true;
 }
 
@@ -1182,7 +1222,6 @@ function harvestCropAt(floor, row, col) {
         spawnHarvestParticles(px, py);
         spawnTextParticle(px, py, `Refunded`, 'var(--accent)');
         
-        // Memory Leak Sweep: Clear drone target bindings immediately
         drones.forEach(d => {
             if (d.targetCrop === crop) {
                 d.targetCrop = null;
@@ -1210,8 +1249,19 @@ function harvestCropAt(floor, row, col) {
     
     if (crop.growth < 100) return false;
     
-    const revenue = crop.cropType.revenue;
-    const xpReward = crop.cropType.xp;
+    const now = performance.now();
+    if (now - lastHarvestTime < 2500) {
+        comboCount = Math.min(8, comboCount + 1);
+    } else {
+        comboCount = 1;
+    }
+    lastHarvestTime = now;
+    
+    let mult = 1 + (comboCount - 1) * 0.3;
+    if (crop.isGolden) mult *= 3;
+    
+    const revenue = Math.round(crop.cropType.revenue * mult);
+    const xpReward = Math.round(crop.cropType.xp * (crop.isGolden ? 2 : 1));
     
     coins += revenue;
     addXP(xpReward);
@@ -1222,11 +1272,19 @@ function harvestCropAt(floor, row, col) {
     const px = gridOffsetX + (crop.col + crop.cropType.width / 2) * cellSize;
     const py = gridOffsetY + (crop.row + crop.cropType.height / 2) * cellSize - crop.floor * 640;
     
-    spawnHarvestParticles(px, py);
-    spawnTextParticle(px, py - 12, `+$${revenue}`, 'var(--accent)');
-    spawnTextParticle(px, py + 12, `+${xpReward} XP`, 'var(--upgrade)');
+    spawnHarvestParticles(px, py, crop.isGolden ? 24 : 12);
     
-    // Memory Leak Sweep: Clear drone targets
+    if (crop.isGolden) {
+        spawnTextParticle(px, py - 24, `🌟 GOLDEN HARVEST! +$${revenue}`, '#fbbf24');
+    } else {
+        spawnTextParticle(px, py - 12, `+$${revenue}`, 'var(--accent)');
+    }
+    
+    if (comboCount > 1) {
+        spawnTextParticle(px, py + 12, `🔥 ${comboCount}x COMBO!`, '#f97316');
+    }
+    spawnTextParticle(px, py + (comboCount > 1 ? 26 : 12), `+${xpReward} XP`, 'var(--upgrade)');
+    
     drones.forEach(d => {
         if (d.targetCrop === crop) {
             d.targetCrop = null;
@@ -1580,9 +1638,14 @@ class Drone {
                 }
             }
         } else if (this.type === 'planter') {
-            if (!selectedSeed || selectedSeed.isStructure) return;
-            const cropType = selectedSeed;
-            if (coins < cropType.cost) return;
+            let cropType = selectedSeed;
+            if (!cropType || cropType.isStructure) {
+                const unlockedCrops = CROPS.filter(c => !c.isStructure && level >= c.unlockLevel && coins >= c.cost);
+                if (unlockedCrops.length > 0) {
+                    cropType = unlockedCrops[unlockedCrops.length - 1];
+                }
+            }
+            if (!cropType || coins < cropType.cost) return;
             
             for (let f = 0; f < 3; f++) {
                 const spot = findEmptySpotFor(f, cropType.width, cropType.height);
@@ -1698,29 +1761,16 @@ function drawBackground() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-function drawCropShadow(ctx, sprite, px, py, pw, ph) {
-    if (!shadowSilhouetteCanvas) return;
-    
-    shadowSilhouetteCanvas.width = pw;
-    shadowSilhouetteCanvas.height = ph;
-    
-    const sCtx = shadowSilhouetteCanvas.getContext('2d');
-    sCtx.clearRect(0, 0, pw, ph);
-    sCtx.drawImage(sprite, 0, 0, pw, ph);
-    
-    sCtx.globalCompositeOperation = 'source-in';
-    sCtx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-    sCtx.fillRect(0, 0, pw, ph);
-    
+function drawCropShadow(ctx, px, py, pw, ph) {
     ctx.save();
-    ctx.translate(px + pw / 2, py + ph);
-    
-    const skewX = -Math.cos(theta) * 0.85;
-    const scaleY = Math.abs(Math.sin(theta)) * 0.22 + 0.08;
-    ctx.transform(1, 0, skewX, scaleY, 0, 0);
-    
-    ctx.translate(-pw / 2, -ph);
-    ctx.drawImage(shadowSilhouetteCanvas, 0, 0, pw, ph);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.beginPath();
+    const shadowX = px + pw / 2 + Math.cos(theta) * 6;
+    const shadowY = py + ph - 2;
+    const shadowRadiusX = pw * 0.42;
+    const shadowRadiusY = ph * 0.18;
+    ctx.ellipse(shadowX, shadowY, shadowRadiusX, shadowRadiusY, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
 }
 
@@ -1898,8 +1948,10 @@ function updateSoilAndCrops(dt) {
                         
                         // LOD sprites scaling
                         let sprite = null;
-                        if (f === activeFloor) {
-                            // LOD 0 (Detailed)
+                        if (crop.cropType.isStructure) {
+                            const nameLower = crop.cropType.name.toLowerCase();
+                            sprite = sprites[nameLower] ? (sprites[nameLower][3] || sprites[nameLower][2]) : null;
+                        } else if (f === activeFloor) {
                             if (stage === 0) sprite = sprites.seed;
                             else if (stage === 1) sprite = sprites.sprout;
                             else {
@@ -1907,7 +1959,6 @@ function updateSoilAndCrops(dt) {
                                 sprite = sprites[nameLower] ? sprites[nameLower][stage] : null;
                             }
                         } else {
-                            // LOD 1 (Simplified)
                             if (crop.growth < 55) {
                                 sprite = sprites.sprout;
                             } else {
@@ -1917,8 +1968,32 @@ function updateSoilAndCrops(dt) {
                         }
                         
                         if (sprite) {
-                            drawCropShadow(ctx, sprite, px, py, pw, ph);
-                            ctx.drawImage(sprite, px, py, pw, ph);
+                            drawCropShadow(ctx, px, py, pw, ph);
+                            
+                            if (crop.isGolden) {
+                                ctx.save();
+                                ctx.shadowColor = '#fbbf24';
+                                ctx.shadowBlur = 10;
+                                ctx.drawImage(sprite, px, py, pw, ph);
+                                ctx.restore();
+                                
+                                if (Math.random() < 0.15) {
+                                    addParticle({
+                                        x: px + Math.random() * pw,
+                                        y: py + Math.random() * ph,
+                                        vx: (Math.random() - 0.5) * 12,
+                                        vy: -15 - Math.random() * 15,
+                                        size: 2,
+                                        color: '#fbbf24',
+                                        life: 0.4,
+                                        update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; this.life -= dt; },
+                                        draw(ctx) { ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y + currentScrollY, this.size, this.size); },
+                                        isDead() { return this.life <= 0; }
+                                    });
+                                }
+                            } else {
+                                ctx.drawImage(sprite, px, py, pw, ph);
+                            }
                         }
                         
                         if (f === activeFloor && !crop.cropType.isStructure && crop.growth < 100) {
@@ -2299,16 +2374,55 @@ function gameLoop(currentTime) {
     
     if (Math.sin(theta) > 0) {
         const factor = Math.sin(theta);
-        const r = Math.floor(180 + factor * 75);
-        const g = Math.floor(180 + factor * 75);
-        const b = Math.floor(190 + factor * 65);
+        const r = Math.floor(210 + factor * 45);
+        const g = Math.floor(210 + factor * 45);
+        const b = Math.floor(215 + factor * 40);
         ambientColor = `rgb(${r}, ${g}, ${b})`;
     } else {
         const factor = Math.abs(Math.sin(theta));
-        const r = Math.floor(30 - factor * 15);
-        const g = Math.floor(30 - factor * 15);
-        const b = Math.floor(65 - factor * 25);
+        const r = Math.floor(120 - factor * 35);
+        const g = Math.floor(130 - factor * 35);
+        const b = Math.floor(180 - factor * 40);
         ambientColor = `rgb(${r}, ${g}, ${b})`;
+    }
+    
+    // Dynamic Weather System (Spring Rain Event)
+    weatherTimer += dt;
+    if (weatherTimer > 35) {
+        weatherTimer = 0;
+        if (Math.random() < 0.3) {
+            isRaining = true;
+            rainDuration = 12;
+            showTicker("🌧️ A gentle Spring Rain begins to fall! All ground crops are being watered.");
+        }
+    }
+    
+    if (isRaining) {
+        rainDuration -= dt;
+        if (rainDuration <= 0) {
+            isRaining = false;
+        } else {
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    const cell = getCell(0, r, c);
+                    if (cell) cell.waterLevel = Math.min(100, cell.waterLevel + 20 * dt);
+                }
+            }
+            if (Math.random() < 0.6) {
+                addParticle({
+                    x: Math.random() * 640,
+                    y: currentScrollY - 20,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: 350 + Math.random() * 150,
+                    size: 1.2,
+                    color: 'rgba(56, 189, 248, 0.65)',
+                    life: 1.5,
+                    update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; this.life -= dt; },
+                    draw(ctx) { ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.size, this.size * 4); },
+                    isDead() { return this.life <= 0 || this.y > 640 + currentScrollY; }
+                });
+            }
+        }
     }
     
     currentScrollY += (activeFloor * 640 - currentScrollY) * 9 * dt;
