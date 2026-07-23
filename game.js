@@ -10,10 +10,10 @@ const CROPS = [
         name: 'Carrot',
         width: 1,
         height: 1,
-        cost: 2,
-        revenue: 10,
-        growthTime: 10, // seconds
-        xp: 5,
+        cost: 3,
+        revenue: 12,
+        growthTime: 15,
+        xp: 8,
         unlockLevel: 1,
         desc: 'Fast growing, simple root vegetable.'
     },
@@ -21,10 +21,10 @@ const CROPS = [
         name: 'Strawberry',
         width: 1,
         height: 1,
-        cost: 5,
-        revenue: 25,
-        growthTime: 20,
-        xp: 12,
+        cost: 10,
+        revenue: 38,
+        growthTime: 30,
+        xp: 20,
         unlockLevel: 2,
         desc: 'Lush red berries. High value crop.'
     },
@@ -32,10 +32,10 @@ const CROPS = [
         name: 'Watermelon',
         width: 2,
         height: 1,
-        cost: 12,
-        revenue: 60,
-        growthTime: 35,
-        xp: 28,
+        cost: 28,
+        revenue: 110,
+        growthTime: 60,
+        xp: 45,
         unlockLevel: 3,
         desc: 'Wide striped melon. Spans 2 horizontal tiles.'
     },
@@ -43,10 +43,10 @@ const CROPS = [
         name: 'Sunflower',
         width: 1,
         height: 2,
-        cost: 25,
-        revenue: 120,
-        growthTime: 50,
-        xp: 55,
+        cost: 60,
+        revenue: 250,
+        growthTime: 95,
+        xp: 90,
         unlockLevel: 4,
         desc: 'Tall yellow flower. Spans 2 vertical tiles.'
     },
@@ -54,12 +54,45 @@ const CROPS = [
         name: 'Pumpkin',
         width: 2,
         height: 2,
-        cost: 60,
-        revenue: 300,
-        growthTime: 80,
-        xp: 120,
+        cost: 150,
+        revenue: 680,
+        growthTime: 140,
+        xp: 180,
         unlockLevel: 5,
         desc: 'Colossal orange gourd. Requires a 2x2 grid space.'
+    },
+    {
+        name: 'Golden Wheat',
+        width: 1,
+        height: 1,
+        cost: 320,
+        revenue: 1500,
+        growthTime: 200,
+        xp: 350,
+        unlockLevel: 6,
+        desc: 'Shimmering wheat stalk with pure gold grains.'
+    },
+    {
+        name: 'Crystal Blossom',
+        width: 1,
+        height: 2,
+        cost: 750,
+        revenue: 3800,
+        growthTime: 280,
+        xp: 750,
+        unlockLevel: 7,
+        desc: 'Rare bioluminescent flora. Spans 2 vertical tiles.'
+    },
+    {
+        name: 'Cosmic Eggplant',
+        width: 2,
+        height: 2,
+        cost: 1800,
+        revenue: 9500,
+        growthTime: 380,
+        xp: 1600,
+        unlockLevel: 8,
+        desc: 'Astronomical galaxy gourd. Requires a 2x2 grid space.'
     },
     {
         name: 'Ascent Pipe',
@@ -710,18 +743,10 @@ function drawAscentPipeSprite(pCtx) {
     pCtx.fillStyle = 'rgba(148, 163, 184, 0.22)';
     pCtx.fillRect(10, 6, 12, 20);
     
-    // Glowing cyan liquid
+    // Active Pumping Liquid Indicator
     pCtx.fillStyle = '#0ea5e9';
-    pCtx.fillRect(11, 10, 10, 16);
+    pCtx.fillRect(12, 10, 8, 12);
     pCtx.fillStyle = '#38bdf8';
-    pCtx.fillRect(12, 11, 8, 15);
-    
-    // Bubbles sub-pixels
-    pCtx.fillStyle = '#ffffff';
-    pCtx.fillRect(13, 13, 2, 2);
-    pCtx.fillRect(17, 18, 1.5, 1.5);
-    pCtx.fillRect(14, 22, 1, 1);
-    
     // Specular sheen
     pCtx.fillStyle = 'rgba(255, 255, 255, 0.45)';
     pCtx.fillRect(11, 6, 1, 20);
@@ -814,7 +839,44 @@ function initSprites() {
     sprites.pumpkin[3].height = 64;
     drawPumpkinMature(sprites.pumpkin[3].getContext('2d'));
     
+    // Golden Wheat (32x32)
+    sprites['golden wheat'] = {};
+    sprites['golden wheat'][2] = document.createElement('canvas');
+    sprites['golden wheat'][2].width = 32;
+    sprites['golden wheat'][2].height = 32;
+    drawGoldenWheatGrowing(sprites['golden wheat'][2].getContext('2d'));
+    
+    sprites['golden wheat'][3] = document.createElement('canvas');
+    sprites['golden wheat'][3].width = 32;
+    sprites['golden wheat'][3].height = 32;
+    drawGoldenWheatMature(sprites['golden wheat'][3].getContext('2d'));
+    
+    // Crystal Blossom (32x64)
+    sprites['crystal blossom'] = {};
+    sprites['crystal blossom'][2] = document.createElement('canvas');
+    sprites['crystal blossom'][2].width = 32;
+    sprites['crystal blossom'][2].height = 64;
+    drawCrystalBlossomGrowing(sprites['crystal blossom'][2].getContext('2d'));
+    
+    sprites['crystal blossom'][3] = document.createElement('canvas');
+    sprites['crystal blossom'][3].width = 32;
+    sprites['crystal blossom'][3].height = 64;
+    drawCrystalBlossomMature(sprites['crystal blossom'][3].getContext('2d'));
+    
+    // Cosmic Eggplant (64x64)
+    sprites['cosmic eggplant'] = {};
+    sprites['cosmic eggplant'][2] = document.createElement('canvas');
+    sprites['cosmic eggplant'][2].width = 64;
+    sprites['cosmic eggplant'][2].height = 64;
+    drawCosmicEggplantGrowing(sprites['cosmic eggplant'][2].getContext('2d'));
+    
+    sprites['cosmic eggplant'][3] = document.createElement('canvas');
+    sprites['cosmic eggplant'][3].width = 64;
+    sprites['cosmic eggplant'][3].height = 64;
+    drawCosmicEggplantMature(sprites['cosmic eggplant'][3].getContext('2d'));
+    
     // Ascent Pipe
+    sprites['ascent pipe'] = {};
     sprites['ascent pipe'][2] = document.createElement('canvas');
     sprites['ascent pipe'][2].width = 32;
     sprites['ascent pipe'][2].height = 32;
@@ -1530,30 +1592,8 @@ class Drone {
             if (dist < 4) {
                 this.x = this.tx;
                 this.y = this.ty;
-                
-                if (this.type === 'harvester') {
-                    if (this.targetCrop) {
-                        harvestCropAt(this.targetCrop.floor, this.targetCrop.row, this.targetCrop.col);
-                        this.targetCrop = null;
-                    }
-                    this.state = 'idle';
-                } else if (this.type === 'planter') {
-                    if (this.targetCell) {
-                        const tc = this.targetCell;
-                        plantCrop(tc.floor, tc.row, tc.col, tc.cropType);
-                        
-                        for (let r = tc.row; r < tc.row + tc.cropType.height; r++) {
-                            for (let c = tc.col; c < tc.col + tc.cropType.width; c++) {
-                                const cell = getCell(tc.floor, r, c);
-                                if (cell) cell.reservedBy = null;
-                            }
-                        }
-                        this.targetCell = null;
-                    }
-                    this.state = 'idle';
-                } else if (this.type === 'waterer') {
-                    this.state = 'watering';
-                }
+                this.state = 'working';
+                this.workTimer = 0.75;
             } else {
                 const step = currentSpeed * dt;
                 const angle = Math.atan2(dy, dx);
@@ -1581,6 +1621,60 @@ class Drone {
                         isDead() { return this.life <= 0; }
                     });
                 }
+            }
+        }
+        
+        if (this.state === 'working') {
+            this.workTimer -= dt;
+            
+            if (Math.random() < 0.45) {
+                const beamColor = this.type === 'harvester' ? 'rgba(6, 182, 212, 0.85)' : (this.type === 'planter' ? 'rgba(245, 158, 11, 0.85)' : 'rgba(56, 189, 248, 0.85)');
+                addParticle({
+                    x: this.x + (Math.random() - 0.5) * 10,
+                    y: this.y + 6,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: 50 + Math.random() * 40,
+                    size: 2,
+                    color: beamColor,
+                    life: 0.3,
+                    update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; this.life -= dt; },
+                    draw(ctx) { ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y + currentScrollY, this.size, this.size); },
+                    isDead() { return this.life <= 0; }
+                });
+            }
+            
+            if (this.workTimer <= 0) {
+                if (this.type === 'harvester') {
+                    if (this.targetCrop) {
+                        harvestCropAt(this.targetCrop.floor, this.targetCrop.row, this.targetCrop.col);
+                        this.targetCrop = null;
+                    }
+                    this.state = 'cooldown';
+                    this.cooldownTimer = 0.4;
+                } else if (this.type === 'planter') {
+                    if (this.targetCell) {
+                        const tc = this.targetCell;
+                        plantCrop(tc.floor, tc.row, tc.col, tc.cropType);
+                        for (let r = tc.row; r < tc.row + tc.cropType.height; r++) {
+                            for (let c = tc.col; c < tc.col + tc.cropType.width; c++) {
+                                const cell = getCell(tc.floor, r, c);
+                                if (cell) cell.reservedBy = null;
+                            }
+                        }
+                        this.targetCell = null;
+                    }
+                    this.state = 'cooldown';
+                    this.cooldownTimer = 0.4;
+                } else if (this.type === 'waterer') {
+                    this.state = 'watering';
+                }
+            }
+        }
+        
+        if (this.state === 'cooldown') {
+            this.cooldownTimer -= dt;
+            if (this.cooldownTimer <= 0) {
+                this.state = 'idle';
             }
         }
         
